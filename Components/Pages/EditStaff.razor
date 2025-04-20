@@ -42,7 +42,7 @@
             </div>
         </div>
 
-		@* Different roles have different fields *@
+        @* Different roles have different fields *@
         @if (CurrentStaff is Doctor doctor)
         {
             <div class="row mb-3">
@@ -121,7 +121,10 @@
                     @if (CurrentStaff.Status == Status.Active)
                     {
                         <select id="gender" class="form-control" @bind="CurrentStaff.Gender" style="width: 100%; font-size: 1rem;">
-                            <option value="">-- Select Gender --</option>
+                            @if (CurrentStaff == null)
+                            {
+                                <option value="">-- Select Gender --</option>
+                            }
                             <option value="@Gender.Male">@Gender.Male</option>
                             <option value="@Gender.Female">@Gender.Female</option>
                         </select>
@@ -156,7 +159,7 @@
             <div class="col-md-6">
                 <div class="form-group">
                     <label for="phone">Phone</label>
-                    <input id="phone" type="text" class="form-control" @bind="CurrentStaff.Phone" readonly="@(CurrentStaff.Status != Status.Active)" style="width: 100%; font-size: 1rem;" />
+                    <input id="phone" type="tel" class="form-control" @bind="PhoneInput" pattern="[0-9]{10}" maxlength="10" readonly="@(CurrentStaff.Status != Status.Active)" style="width: 100%; font-size: 1rem;" />
                 </div>
             </div>
         </div>
@@ -170,7 +173,7 @@
             </div>
         </div>
 
-        @* Only active staff's info can be updated*@
+        @* Only active staff's info can be updated *@
         @if (CurrentStaff.Status == Status.Active)
         {
             <div class="row mb-3">
@@ -216,14 +219,21 @@
     private User CurrentStaff { get; set; }
     private string SelectedDepartment { get; set; }
     private string Level { get; set; }
+    private string PhoneInput { get; set; }
     private List<string> Departments { get; set; } = new List<string>();
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         base.OnInitialized();
         LoadDepartments();
+        // If StaffIdInput is set (e.g., after refresh), reload staff data
+        if (!string.IsNullOrWhiteSpace(StaffIdInput))
+        {
+            await HandleAccess();
+        }
     }
 
+    // Load departments from database
     private void LoadDepartments()
     {
         try
@@ -246,6 +256,7 @@
         }
     }
 
+    // Get hire date for display
     private string GetHireDate()
     {
         if (CurrentStaff is Doctor doc) return doc.HireDate.ToString("yyyy-MM-dd");
@@ -254,6 +265,7 @@
         return string.Empty;
     }
 
+    // Get level for display
     private string GetLevel()
     {
         if (CurrentStaff is Doctor doc) return doc.Level;
@@ -261,6 +273,7 @@
         return string.Empty;
     }
 
+    // Handle staff data access by ID
     private async Task HandleAccess()
     {
         ErrorMessage = null;
@@ -303,7 +316,21 @@
                 CurrentStaff.LastName = reader.GetString("last_name");
                 CurrentStaff.Email = reader.GetString("email");
                 CurrentStaff.Phone = reader.GetInt64("phone");
-                CurrentStaff.Gender = (Gender)Enum.Parse(typeof(Gender), reader.GetString("gender"));
+                PhoneInput = CurrentStaff.Phone.ToString("D10"); // Ensure 10-digit format
+
+                // Parse gender with validation
+                string genderStr = reader.GetString("gender");
+                if (Enum.TryParse<Gender>(genderStr, out var gender))
+                {
+                    CurrentStaff.Gender = gender;
+                }
+                else
+                {
+                    ErrorMessage = "Invalid gender value in database.";
+                    CurrentStaff = null;
+                    return;
+                }
+
                 CurrentStaff.BirthDate = reader.GetDateTime("birth_date");
                 CurrentStaff.Role = role;
                 CurrentStaff.Status = (Status)Enum.Parse(typeof(Status), reader.GetString("status"));
@@ -374,6 +401,7 @@
         }
     }
 
+    // Handle staff information update
     private async Task HandleUpdate()
     {
         bool confirm = await ConfirmAction("Are you sure you want to update this staff's information?");
@@ -391,7 +419,8 @@
             return;
         }
 
-        if (CurrentStaff.Gender == default(Gender))
+        // Validate gender using Enum.IsDefined
+        if (!Enum.IsDefined(typeof(Gender), CurrentStaff.Gender))
         {
             ErrorMessage = "Gender is required.";
             return;
@@ -409,11 +438,20 @@
             return;
         }
 
-        if (CurrentStaff.Phone.ToString().Length != 10)
+        // Validate phone number
+        if (string.IsNullOrWhiteSpace(PhoneInput) || PhoneInput.Length != 10 || !System.Text.RegularExpressions.Regex.IsMatch(PhoneInput, @"^\d{10}$"))
         {
-            ErrorMessage = "A valid 10-digit Phone number is required.";
+            ErrorMessage = "A valid 10-digit Phone number is required (numbers only).";
             return;
         }
+
+        // Convert PhoneInput to long
+        if (!long.TryParse(PhoneInput, out long phoneNumber))
+        {
+            ErrorMessage = "Invalid phone number format.";
+            return;
+        }
+        CurrentStaff.Phone = phoneNumber;
 
         if (CurrentStaff is Doctor && string.IsNullOrWhiteSpace(SelectedDepartment))
         {
@@ -476,8 +514,12 @@
 
                 await transaction.CommitAsync();
 
+                // Store StaffIdInput for reload
+                var staffId = StaffIdInput;
                 HandleCancel();
                 ShowSuccessMessage("Staff updated successfully.");
+                // Refresh page to reload updated data
+                Navigation.NavigateTo($"/admin/edit-staff?staffId={staffId}", forceLoad: false);
             }
             catch
             {
@@ -491,6 +533,7 @@
         }
     }
 
+    // Handle password reset
     private async Task HandleResetPassword()
     {
         bool confirm = await ConfirmAction("Are you sure you want to reset this staff's password?");
@@ -532,6 +575,7 @@
         }
     }
 
+    // Handle staff dismissal
     private async Task HandleDismiss()
     {
         bool confirm = await ConfirmAction("Are you sure you want to dismiss this staff?");
@@ -583,8 +627,12 @@
 
                 await transaction.CommitAsync();
 
+                // Store StaffIdInput for reload
+                var staffId = StaffIdInput;
                 HandleCancel();
                 ShowSuccessMessage("Staff dismissed successfully.");
+                // Refresh page to reload updated data
+                Navigation.NavigateTo($"/admin/edit-staff?staffId={staffId}", forceLoad: false);
             }
             catch
             {
@@ -598,6 +646,7 @@
         }
     }
 
+    // Generate random password
     private string GenerateRandomPassword()
     {
         const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -606,12 +655,18 @@
             .Select(s => s[random.Next(s.Length)]).ToArray());
     }
 
+    // Reset form fields on cancel
     protected override void HandleCancel()
     {
         StaffIdInput = null;
         CurrentStaff = null;
         SelectedDepartment = null;
         Level = null;
-        base.HandleCancel();
+        PhoneInput = null;
+        // Only clear error message if it's not a success message
+        if (!IsSuccessMessage)
+        {
+            ErrorMessage = null;
+        }
     }
 }
