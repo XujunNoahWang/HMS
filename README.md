@@ -104,9 +104,8 @@ To run the HMS project, follow these steps:
 
 2. **Database Configuration**:
 
-   - Create a MySQL database named `hms` and run `HMS_CREATETABLE.sql` to create 16 tables.
+   - Create a MySQL database named `hms` and run `HMS_MOCKUPDATA` to create 16 tables and insert mockup data (\~2,000 records). Please find the SQL file in the `DATABASE` folder.
    - Update the connection string in `DatabaseConnection.cs` (`Server`, `UserID`, `Password`).
-   - Import test data (\~2,000 records) or use default data (193 users, 10 departments, etc.).
 
 3. **Project Setup**:
 
