@@ -1,0 +1,19 @@
+﻿@page "/dashboard/Nurse"
+@inherits DashboardBase
+@using HMS.Models
+
+<PageTitle>Nurse Dashboard</PageTitle>
+
+<div class="container d-flex flex-column justify-content-center align-items-center" style="height: 30rem;">
+    <h1>Welcome, Nurse @(DisplayName ?? "Nurse")</h1>
+    <h1>How can I assist you?</h1>
+</div>
+
+@code {
+    protected override Role ExpectedRole => Role.Nurse;
+
+    protected override void SetDisplayName(User user)
+    {
+        DisplayName = $"{user.FirstName} {user.LastName}";
+    }
+}

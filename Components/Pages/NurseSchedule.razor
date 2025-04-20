@@ -1,0 +1,194 @@
+﻿@page "/nurse/schedule"
+@inherits ScheduleBase
+@using HMS.Models
+@using MySqlConnector
+
+<PageTitle>My Schedule</PageTitle>
+<!--Similar with doctor's appointment page, but nurses can not add new appointments-->
+<div class="container">
+    <div class="row mb-3">
+        <div class="col-auto">
+            <label for="patientId">Patient ID Number:</label>
+        </div>
+        <div class="col-auto">
+            <input id="patientId" type="text" class="form-control no-spinner" @bind="PatientId" style="width: 15ch;" />
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-primary" @onclick="HandleAccess">Access</button>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-purple" @onclick="HandleViewAll">View All My Appointments</button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="alert alert-danger">@ErrorMessage</div>
+    }
+
+    <!--Dispaly all appointments-->
+    @if (Appointments.Any())
+    {
+        <table class="table table-bordered fixed-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Time</th>
+                    <th>Patient ID</th>
+                    <th>Name</th>
+                    <th>Gender</th>
+                    <th>Age</th>
+                    <th>Appointment Status</th>
+                    <th>Phone</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var appointment in Appointments)
+                {
+                    <tr>
+                        <td>@appointment.Time.ToString("MMM d, yyyy")</td>
+                        <td>@appointment.Time.ToString("h:mm tt")</td>
+                        <td>
+                            <a href="@($"{PatientLinkPrefix}?patientId={appointment.PatientId}")" class="text-primary">@appointment.PatientId</a>
+                        </td>
+                        <td>@appointment.PatientName</td>
+                        <td>@appointment.Gender.ToString()</td>
+                        <td>@appointment.Age</td>
+                        <td>@appointment.Status</td>
+                        <td>@appointment.FormattedPhone</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    else if (PatientId != null)
+    {
+        <p>No appointments found for this patient.</p>
+    }
+    else
+    {
+        <div class="alert alert-info">No upcoming appointments found for today or future dates.</div>
+    }
+</div>
+
+<style>
+    .fixed-table {
+        table-layout: fixed;
+        width: 100%;
+    }
+
+        .fixed-table th,
+        .fixed-table td {
+            overflow-wrap: break-word;
+            word-break: break-word;
+            padding: 8px;
+        }
+
+            .fixed-table th:nth-child(1),
+            .fixed-table td:nth-child(1) {
+                width: 12%;
+            }
+
+            .fixed-table th:nth-child(2),
+            .fixed-table td:nth-child(2) {
+                width: 10%;
+            }
+
+            .fixed-table th:nth-child(3),
+            .fixed-table td:nth-child(3) {
+                width: 12%;
+            }
+
+            .fixed-table th:nth-child(4),
+            .fixed-table td:nth-child(4) {
+                width: 15%;
+            }
+
+            .fixed-table th:nth-child(5),
+            .fixed-table td:nth-child(5) {
+                width: 10%;
+            }
+
+            .fixed-table th:nth-child(6),
+            .fixed-table td:nth-child(6) {
+                width: 8%;
+            }
+
+            .fixed-table th:nth-child(7),
+            .fixed-table td:nth-child(7) {
+                width: 18%;
+            }
+
+            .fixed-table th:nth-child(8),
+            .fixed-table td:nth-child(8) {
+                width: 15%;
+            }
+
+        .fixed-table th {
+            text-align: center;
+        }
+
+        .fixed-table td {
+            text-align: left;
+        }
+
+    .no-spinner::-webkit-inner-spin-button,
+    .no-spinner::-webkit-outer-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+
+    .no-spinner[type=number] {
+        -moz-appearance: textfield;
+    }
+
+    .btn-purple {
+        background-color: #6f42c1;
+        border-color: #6f42c1;
+        color: white;
+    }
+
+        .btn-purple:hover {
+            background-color: #563d7c;
+            border-color: #563d7c;
+            color: white;
+        }
+
+        .btn-purple:focus, .btn-purple.focus {
+            box-shadow: 0 0 0 0.2rem rgba(111, 66, 193, 0.5);
+        }
+
+        .btn-purple.disabled, .btn-purple:disabled {
+            background-color: #6f42c1;
+            border-color: #6f42c1;
+            opacity: 0.65;
+        }
+
+        .btn-purple:not(:disabled):not(.disabled):active,
+        .btn-purple:not(:disabled):not(.disabled).active {
+            background-color: #563d7c;
+            border-color: #563d7c;
+        }
+</style>
+
+@code {
+    protected override Role ExpectedRole => Role.Nurse;
+
+    protected override bool ApplyDoctorIdFilter()
+    {
+        // Disable doctor_id filter to show all appointments
+        return false;
+    }
+
+    protected override string GetQueryConditions()
+    {
+        // Restrict to future appointments with Booked or CheckedIn status
+        return " AND a.time >= @CurrentDate AND a.status IN ('Booked', 'CheckedIn')";
+    }
+
+    protected override void AddQueryParameters(MySqlCommand command)
+    {
+        // Add current date parameter for nurse query
+        command.Parameters.AddWithValue("@CurrentDate", DateTime.Today);
+    }
+}

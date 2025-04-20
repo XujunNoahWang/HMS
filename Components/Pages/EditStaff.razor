@@ -1,0 +1,617 @@
+﻿@page "/admin/edit-staff"
+@inherits EditEntityBase
+@using HMS.Models
+@using MySqlConnector
+
+<PageTitle>Edit Staff</PageTitle>
+
+<div class="container">
+    <h3>Edit Staff</h3>
+
+    <div class="row mb-3">
+        <div class="col-auto">
+            <label for="staffId">Staff ID Number:</label>
+        </div>
+        <div class="col-auto">
+            <input id="staffId" type="text" class="form-control no-spinner" @bind="StaffIdInput" style="width: 15ch;" />
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-primary" @onclick="HandleAccess">Access</button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="alert @(IsSuccessMessage ? "alert-success" : "alert-danger")">@ErrorMessage</div>
+    }
+
+    @if (CurrentStaff != null)
+    {
+        <div class="row mb-3">
+            <div class="col-auto">
+                <h4 style="color: @(CurrentStaff.Status == Status.Active ? "green" : "red");">Status: @CurrentStaff.Status</h4>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label for="role">Role</label>
+                    <input id="role" type="text" class="form-control" value="@CurrentStaff.Role" readonly style="width: 100%; font-size: 1rem;" />
+                </div>
+            </div>
+        </div>
+
+		@* Different roles have different fields *@
+        @if (CurrentStaff is Doctor doctor)
+        {
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="department">Department</label>
+                        @if (CurrentStaff.Status == Status.Active)
+                        {
+                            <select id="department" class="form-control" @bind="SelectedDepartment" style="width: 100%; font-size: 1rem;">
+                                <option value="">-- Select Department --</option>
+                                @foreach (var dept in Departments)
+                                {
+                                    <option value="@dept">@dept</option>
+                                }
+                            </select>
+                        }
+                        else
+                        {
+                            <input id="department" type="text" class="form-control" value="@doctor.Specialty" readonly style="width: 100%; font-size: 1rem;" />
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (CurrentStaff is Doctor || CurrentStaff is Nurse)
+        {
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="level">Level</label>
+                        @if (CurrentStaff.Status == Status.Active)
+                        {
+                            <select id="level" class="form-control" @bind="Level" style="width: 100%; font-size: 1rem;">
+                                <option value="">-- Select Level --</option>
+                                <option value="Intern">Intern</option>
+                                <option value="Assistant">Assistant</option>
+                                <option value="Junior">Junior</option>
+                                <option value="General">General</option>
+                                <option value="Senior">Senior</option>
+                                <option value="Lead">Lead</option>
+                                <option value="Chief">Chief</option>
+                            </select>
+                        }
+                        else
+                        {
+                            <input id="level" type="text" class="form-control" value="@GetLevel()" readonly style="width: 100%; font-size: 1rem;" />
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label for="firstName">First Name</label>
+                    <input id="firstName" type="text" class="form-control" @bind="CurrentStaff.FirstName" maxlength="50" readonly="@(CurrentStaff.Status != Status.Active)" style="width: 100%; font-size: 1rem;" />
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label for="lastName">Last Name</label>
+                    <input id="lastName" type="text" class="form-control" @bind="CurrentStaff.LastName" maxlength="50" readonly="@(CurrentStaff.Status != Status.Active)" style="width: 100%; font-size: 1rem;" />
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label for="gender">Gender</label>
+                    @if (CurrentStaff.Status == Status.Active)
+                    {
+                        <select id="gender" class="form-control" @bind="CurrentStaff.Gender" style="width: 100%; font-size: 1rem;">
+                            <option value="">-- Select Gender --</option>
+                            <option value="@Gender.Male">@Gender.Male</option>
+                            <option value="@Gender.Female">@Gender.Female</option>
+                        </select>
+                    }
+                    else
+                    {
+                        <input id="gender" type="text" class="form-control" value="@CurrentStaff.Gender.ToString()" readonly style="width: 100%; font-size: 1rem;" />
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label for="birthDate">Date of Birth</label>
+                    <input id="birthDate" type="date" class="form-control" @bind="CurrentStaff.BirthDate" readonly="@(CurrentStaff.Status != Status.Active)" style="width: 100%; font-size: 1rem;" />
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input id="email" type="email" class="form-control" @bind="CurrentStaff.Email" readonly="@(CurrentStaff.Status != Status.Active)" style="width: 100%; font-size: 1rem;" />
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label for="phone">Phone</label>
+                    <input id="phone" type="text" class="form-control" @bind="CurrentStaff.Phone" readonly="@(CurrentStaff.Status != Status.Active)" style="width: 100%; font-size: 1rem;" />
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label for="hireDate">Hire Date</label>
+                    <input id="hireDate" type="date" class="form-control" value="@GetHireDate()" readonly style="width: 100%; font-size: 1rem;" />
+                </div>
+            </div>
+        </div>
+
+        @* Only active staff's info can be updated*@
+        @if (CurrentStaff.Status == Status.Active)
+        {
+            <div class="row mb-3">
+                <div class="col-auto">
+                    <button class="btn btn-primary" @onclick="HandleUpdate">Update</button>
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-secondary" @onclick="HandleCancel">Cancel</button>
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-warning" @onclick="HandleResetPassword">Reset Password</button>
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-danger" @onclick="HandleDismiss">Dismiss</button>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="row mb-3">
+                <div class="col-auto">
+                    <button class="btn btn-secondary" @onclick="HandleCancel">Cancel</button>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+<style>
+    .no-spinner::-webkit-inner-spin-button,
+    .no-spinner::-webkit-outer-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+
+    .no-spinner[type=number] {
+        -moz-appearance: textfield;
+    }
+</style>
+
+@code {
+    private string StaffIdInput { get; set; }
+    private User CurrentStaff { get; set; }
+    private string SelectedDepartment { get; set; }
+    private string Level { get; set; }
+    private List<string> Departments { get; set; } = new List<string>();
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        LoadDepartments();
+    }
+
+    private void LoadDepartments()
+    {
+        try
+        {
+            using var connection = DatabaseConnection.GetConnection();
+            connection.Open();
+
+            string query = "SELECT name FROM Departments WHERE closure_date IS NULL";
+            using var command = new MySqlCommand(query, connection);
+            using var reader = command.ExecuteReader();
+            Departments.Clear();
+            while (reader.Read())
+            {
+                Departments.Add(reader.GetString("name"));
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to load departments: {ex.Message}";
+        }
+    }
+
+    private string GetHireDate()
+    {
+        if (CurrentStaff is Doctor doc) return doc.HireDate.ToString("yyyy-MM-dd");
+        if (CurrentStaff is Nurse nurse) return nurse.HireDate.ToString("yyyy-MM-dd");
+        if (CurrentStaff is Cashier cashier) return cashier.HireDate.ToString("yyyy-MM-dd");
+        return string.Empty;
+    }
+
+    private string GetLevel()
+    {
+        if (CurrentStaff is Doctor doc) return doc.Level;
+        if (CurrentStaff is Nurse nurse) return nurse.Level;
+        return string.Empty;
+    }
+
+    private async Task HandleAccess()
+    {
+        ErrorMessage = null;
+        IsSuccessMessage = false;
+        CurrentStaff = null;
+
+        if (string.IsNullOrWhiteSpace(StaffIdInput) || !int.TryParse(StaffIdInput, out int staffId) || StaffIdInput.Length != 9)
+        {
+            ErrorMessage = "Please enter a valid 9-digit numeric Staff ID.";
+            return;
+        }
+
+        try
+        {
+            using var connection = DatabaseConnection.GetConnection();
+            await connection.OpenAsync();
+
+            // Restrict to Doctor, Nurse, Cashier roles
+            string userQuery = @"
+                SELECT id, first_name, last_name, email, phone, gender, birth_date, role, status
+                FROM Users
+                WHERE id = @StaffId AND role IN ('Doctor', 'Nurse', 'Cashier')";
+            using var userCommand = new MySqlCommand(userQuery, connection);
+            userCommand.Parameters.AddWithValue("@StaffId", staffId);
+            using var reader = await userCommand.ExecuteReaderAsync();
+
+            if (await reader.ReadAsync())
+            {
+                var role = (Role)Enum.Parse(typeof(Role), reader.GetString("role"));
+                CurrentStaff = role switch
+                {
+                    Role.Doctor => new Doctor(),
+                    Role.Nurse => new Nurse(),
+                    Role.Cashier => new Cashier(),
+                    _ => throw new InvalidOperationException("Invalid role")
+                };
+
+                CurrentStaff.Id = reader.GetInt32("id");
+                CurrentStaff.FirstName = reader.GetString("first_name");
+                CurrentStaff.LastName = reader.GetString("last_name");
+                CurrentStaff.Email = reader.GetString("email");
+                CurrentStaff.Phone = reader.GetInt64("phone");
+                CurrentStaff.Gender = (Gender)Enum.Parse(typeof(Gender), reader.GetString("gender"));
+                CurrentStaff.BirthDate = reader.GetDateTime("birth_date");
+                CurrentStaff.Role = role;
+                CurrentStaff.Status = (Status)Enum.Parse(typeof(Status), reader.GetString("status"));
+                await reader.CloseAsync();
+
+                if (CurrentStaff is Doctor doctor)
+                {
+                    string doctorQuery = @"
+                        SELECT specialty, level, hire_date
+                        FROM Doctors
+                        WHERE user_id = @StaffId";
+                    using var doctorCommand = new MySqlCommand(doctorQuery, connection);
+                    doctorCommand.Parameters.AddWithValue("@StaffId", staffId);
+                    using var doctorReader = await doctorCommand.ExecuteReaderAsync();
+                    if (await doctorReader.ReadAsync())
+                    {
+                        doctor.Specialty = doctorReader.GetString("specialty");
+                        doctor.Level = doctorReader.GetString("level");
+                        doctor.HireDate = doctorReader.GetDateTime("hire_date");
+                        SelectedDepartment = doctor.Specialty;
+                        Level = doctor.Level;
+                    }
+                    await doctorReader.CloseAsync();
+                }
+                else if (CurrentStaff is Nurse nurse)
+                {
+                    string nurseQuery = @"
+                        SELECT level, hire_date
+                        FROM Nurses
+                        WHERE user_id = @StaffId";
+                    using var nurseCommand = new MySqlCommand(nurseQuery, connection);
+                    nurseCommand.Parameters.AddWithValue("@StaffId", staffId);
+                    using var nurseReader = await nurseCommand.ExecuteReaderAsync();
+                    if (await nurseReader.ReadAsync())
+                    {
+                        nurse.Level = nurseReader.GetString("level");
+                        nurse.HireDate = nurseReader.GetDateTime("hire_date");
+                        Level = nurse.Level;
+                    }
+                    await nurseReader.CloseAsync();
+                }
+                else if (CurrentStaff is Cashier cashier)
+                {
+                    string cashierQuery = @"
+                        SELECT hire_date
+                        FROM Cashiers
+                        WHERE user_id = @StaffId";
+                    using var cashierCommand = new MySqlCommand(cashierQuery, connection);
+                    cashierCommand.Parameters.AddWithValue("@StaffId", staffId);
+                    using var cashierReader = await cashierCommand.ExecuteReaderAsync();
+                    if (await cashierReader.ReadAsync())
+                    {
+                        cashier.HireDate = cashierReader.GetDateTime("hire_date");
+                    }
+                    await cashierReader.CloseAsync();
+                }
+            }
+            else
+            {
+                ErrorMessage = "Staff not found or role is invalid.";
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to load staff data: {ex.Message}";
+            CurrentStaff = null;
+        }
+    }
+
+    private async Task HandleUpdate()
+    {
+        bool confirm = await ConfirmAction("Are you sure you want to update this staff's information?");
+        if (!confirm)
+        {
+            return;
+        }
+
+        ErrorMessage = null;
+        IsSuccessMessage = false;
+
+        if (string.IsNullOrWhiteSpace(CurrentStaff.FirstName) || string.IsNullOrWhiteSpace(CurrentStaff.LastName))
+        {
+            ErrorMessage = "First Name and Last Name are required.";
+            return;
+        }
+
+        if (CurrentStaff.Gender == default(Gender))
+        {
+            ErrorMessage = "Gender is required.";
+            return;
+        }
+
+        if (CurrentStaff.BirthDate == default(DateTime))
+        {
+            ErrorMessage = "Date of Birth is required.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(CurrentStaff.Email) || !CurrentStaff.Email.Contains("@") || !CurrentStaff.Email.Contains("."))
+        {
+            ErrorMessage = "A valid Email is required.";
+            return;
+        }
+
+        if (CurrentStaff.Phone.ToString().Length != 10)
+        {
+            ErrorMessage = "A valid 10-digit Phone number is required.";
+            return;
+        }
+
+        if (CurrentStaff is Doctor && string.IsNullOrWhiteSpace(SelectedDepartment))
+        {
+            ErrorMessage = "Department is required for Doctors.";
+            return;
+        }
+
+        if ((CurrentStaff is Doctor || CurrentStaff is Nurse) && string.IsNullOrWhiteSpace(Level))
+        {
+            ErrorMessage = "Level is required for Doctors and Nurses.";
+            return;
+        }
+
+        try
+        {
+            using var connection = DatabaseConnection.GetConnection();
+            await connection.OpenAsync();
+            using var transaction = connection.BeginTransaction();
+
+            try
+            {
+                string userQuery = @"
+                    UPDATE Users
+                    SET first_name = @FirstName, last_name = @LastName, email = @Email, phone = @Phone,
+                        gender = @Gender, birth_date = @BirthDate
+                    WHERE id = @Id";
+                using var userCommand = new MySqlCommand(userQuery, connection, transaction);
+                userCommand.Parameters.AddWithValue("@FirstName", CurrentStaff.FirstName);
+                userCommand.Parameters.AddWithValue("@LastName", CurrentStaff.LastName);
+                userCommand.Parameters.AddWithValue("@Email", CurrentStaff.Email);
+                userCommand.Parameters.AddWithValue("@Phone", CurrentStaff.Phone);
+                userCommand.Parameters.AddWithValue("@Gender", CurrentStaff.Gender.ToString());
+                userCommand.Parameters.AddWithValue("@BirthDate", CurrentStaff.BirthDate);
+                userCommand.Parameters.AddWithValue("@Id", CurrentStaff.Id);
+                await userCommand.ExecuteNonQueryAsync();
+
+                if (CurrentStaff is Doctor doctor)
+                {
+                    string doctorQuery = @"
+                        UPDATE Doctors
+                        SET specialty = @Specialty, level = @Level
+                        WHERE user_id = @UserId";
+                    using var doctorCommand = new MySqlCommand(doctorQuery, connection, transaction);
+                    doctorCommand.Parameters.AddWithValue("@Specialty", SelectedDepartment);
+                    doctorCommand.Parameters.AddWithValue("@Level", Level);
+                    doctorCommand.Parameters.AddWithValue("@UserId", CurrentStaff.Id);
+                    await doctorCommand.ExecuteNonQueryAsync();
+                }
+                else if (CurrentStaff is Nurse nurse)
+                {
+                    string nurseQuery = @"
+                        UPDATE Nurses
+                        SET level = @Level
+                        WHERE user_id = @UserId";
+                    using var nurseCommand = new MySqlCommand(nurseQuery, connection, transaction);
+                    nurseCommand.Parameters.AddWithValue("@Level", Level);
+                    nurseCommand.Parameters.AddWithValue("@UserId", CurrentStaff.Id);
+                    await nurseCommand.ExecuteNonQueryAsync();
+                }
+
+                await transaction.CommitAsync();
+
+                HandleCancel();
+                ShowSuccessMessage("Staff updated successfully.");
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to update staff: {ex.Message}";
+        }
+    }
+
+    private async Task HandleResetPassword()
+    {
+        bool confirm = await ConfirmAction("Are you sure you want to reset this staff's password?");
+        if (!confirm)
+        {
+            return;
+        }
+
+        ErrorMessage = null;
+        IsSuccessMessage = false;
+
+        try
+        {
+            using var connection = DatabaseConnection.GetConnection();
+            await connection.OpenAsync();
+
+            string newPassword = GenerateRandomPassword();
+            string query = @"
+                UPDATE Users
+                SET password = @Password
+                WHERE id = @Id";
+            using var command = new MySqlCommand(query, connection);
+            command.Parameters.AddWithValue("@Password", newPassword);
+            command.Parameters.AddWithValue("@Id", CurrentStaff.Id);
+            int rowsAffected = await command.ExecuteNonQueryAsync();
+
+            if (rowsAffected > 0)
+            {
+                ShowSuccessMessage("Password reset successfully. New password will be sent to staff by email.");
+            }
+            else
+            {
+                ErrorMessage = "Failed to reset password.";
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to reset password: {ex.Message}";
+        }
+    }
+
+    private async Task HandleDismiss()
+    {
+        bool confirm = await ConfirmAction("Are you sure you want to dismiss this staff?");
+        if (!confirm)
+        {
+            return;
+        }
+
+        ErrorMessage = null;
+        IsSuccessMessage = false;
+
+        try
+        {
+            using var connection = DatabaseConnection.GetConnection();
+            await connection.OpenAsync();
+            using var transaction = connection.BeginTransaction();
+
+            try
+            {
+                string userQuery = @"
+                    UPDATE Users
+                    SET status = 'Inactive'
+                    WHERE id = @Id";
+                using var userCommand = new MySqlCommand(userQuery, connection, transaction);
+                userCommand.Parameters.AddWithValue("@Id", CurrentStaff.Id);
+                await userCommand.ExecuteNonQueryAsync();
+
+                string roleQuery = CurrentStaff.Role.ToString() switch
+                {
+                    "Doctor" => @"
+                        UPDATE Doctors
+                        SET termination_date = @TerminationDate
+                        WHERE user_id = @UserId",
+                    "Nurse" => @"
+                        UPDATE Nurses
+                        SET termination_date = @TerminationDate
+                        WHERE user_id = @UserId",
+                    "Cashier" => @"
+                        UPDATE Cashiers
+                        SET termination_date = @TerminationDate
+                        WHERE user_id = @UserId",
+                    _ => throw new Exception("Invalid role selected.")
+                };
+
+                using var roleCommand = new MySqlCommand(roleQuery, connection, transaction);
+                roleCommand.Parameters.AddWithValue("@TerminationDate", DateTime.Today);
+                roleCommand.Parameters.AddWithValue("@UserId", CurrentStaff.Id);
+                await roleCommand.ExecuteNonQueryAsync();
+
+                await transaction.CommitAsync();
+
+                HandleCancel();
+                ShowSuccessMessage("Staff dismissed successfully.");
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to dismiss staff: {ex.Message}";
+        }
+    }
+
+    private string GenerateRandomPassword()
+    {
+        const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        Random random = new Random();
+        return new string(Enumerable.Repeat(chars, 8)
+            .Select(s => s[random.Next(s.Length)]).ToArray());
+    }
+
+    protected override void HandleCancel()
+    {
+        StaffIdInput = null;
+        CurrentStaff = null;
+        SelectedDepartment = null;
+        Level = null;
+        base.HandleCancel();
+    }
+}

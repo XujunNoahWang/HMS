@@ -1,0 +1,230 @@
+﻿@page "/patient/appointments"
+@using HMS.Services
+@using HMS.Models
+@using HMS.Data
+@using MySqlConnector
+@inject UserStateService UserStateService
+@inject NavigationManager Navigation
+@inject DatabaseConnection DatabaseConnection
+
+<PageTitle>My Appointments</PageTitle>
+
+<div class="container">
+    <div class="row mb-3">
+        <div class="col-auto">
+            <button class="btn btn-primary" @onclick="HandleNewAppointment">New Appointment</button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="alert alert-danger">@ErrorMessage</div>
+    }
+
+    @if (Appointments.Any())
+    {
+        <table class="table table-bordered fixed-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Time</th>
+                    <th>Doctor Name</th>
+                    <th>Specialty</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var appointment in Appointments)
+                {
+                    <tr>
+                        <td>@appointment.Time.ToString("MMM d, yyyy")</td>
+                        <td>@appointment.Time.ToString("h:mm tt")</td>
+                        <td>@appointment.DoctorName</td>
+                        <td>@appointment.Specialty</td>
+                        <td>@appointment.Status</td>
+                        <td>
+                            @if (appointment.Status == AppointmentStatus.Booked)
+                            {
+                                <button class="btn btn-danger btn-sm" @onclick="() => HandleCancel(appointment.Id)">Cancel</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    else
+    {
+        <div class="alert alert-info">No appointments found.</div> 
+    }
+</div>
+
+<style>
+    .fixed-table {
+        table-layout: fixed;
+        width: 100%;
+    }
+
+        .fixed-table th,
+        .fixed-table td {
+            overflow-wrap: break-word;
+            word-break: break-word;
+            padding: 8px;
+            font-size: 1rem;
+        }
+
+            .fixed-table th:nth-child(1),
+            .fixed-table td:nth-child(1) {
+                width: 20%;
+            }
+
+            .fixed-table th:nth-child(2),
+            .fixed-table td:nth-child(2) {
+                width: 15%;
+            }
+
+            .fixed-table th:nth-child(3),
+            .fixed-table td:nth-child(3) {
+                width: 20%;
+            }
+
+            .fixed-table th:nth-child(4),
+            .fixed-table td:nth-child(4) {
+                width: 20%;
+            }
+
+            .fixed-table th:nth-child(5),
+            .fixed-table td:nth-child(5) {
+                width: 15%;
+            }
+
+            .fixed-table th:nth-child(6),
+            .fixed-table td:nth-child(6) {
+                width: 10%;
+            }
+
+        .fixed-table th {
+            text-align: center;
+        }
+
+        .fixed-table td {
+            text-align: left;
+        }
+</style>
+
+@code {
+	// A temporary class to represent the appointment data
+    private class AppointmentViewModel
+    {
+        public long Id { get; set; }
+        public int PatientId { get; set; }
+        public int DoctorId { get; set; }
+        public DateTime Time { get; set; }
+        public AppointmentStatus Status { get; set; }
+        public string DoctorName { get; set; }
+        public string Specialty { get; set; }
+    }
+
+    private enum AppointmentStatus
+    {
+        Booked,
+        Cancelled,
+        CheckedIn,
+        NoShow
+    }
+    
+    private List<AppointmentViewModel> Appointments { get; set; } = new List<AppointmentViewModel>();
+    private string ErrorMessage { get; set; }
+
+    protected override void OnInitialized()
+    {
+        var currentUser = UserStateService.GetCurrentUser();
+        if (currentUser == null || currentUser.Role != Role.Patient)
+        {
+            Navigation.NavigateTo("/", forceLoad: true);
+            return;
+        }
+
+        LoadAppointments(currentUser.Id);
+    }
+
+	// Patients only can see their own appointments
+    private void LoadAppointments(int patientId)
+    {
+        try
+        {
+            using var connection = DatabaseConnection.GetConnection();
+            connection.Open();
+
+            string query = @"
+                SELECT a.id, a.patient_id, a.doctor_id, a.time, a.status,
+                    u.first_name AS doctor_first_name, u.last_name AS doctor_last_name,
+                    dr.specialty
+                FROM Appointments a
+                JOIN Users u ON a.doctor_id = u.id
+                JOIN Doctors dr ON u.id = dr.user_id
+                WHERE a.patient_id = @PatientId
+                ORDER BY a.time DESC";
+            using var command = new MySqlCommand(query, connection);
+            command.Parameters.AddWithValue("@PatientId", patientId);
+            using var reader = command.ExecuteReader();
+            Appointments.Clear();
+            while (reader.Read())
+            {
+                Appointments.Add(new AppointmentViewModel
+                    {
+                        Id = reader.GetInt64("id"),
+                        PatientId = reader.GetInt32("patient_id"),
+                        DoctorId = reader.GetInt32("doctor_id"),
+                        Time = reader.GetDateTime("time"),
+                        Status = (AppointmentStatus)Enum.Parse(typeof(AppointmentStatus), reader.GetString("status")),
+                        DoctorName = $"{reader.GetString("doctor_first_name")} {reader.GetString("doctor_last_name")}",
+                        Specialty = reader.GetString("specialty")
+                    });
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to load appointments: {ex.Message}";
+            Appointments.Clear();
+        }
+    }
+
+    private void HandleNewAppointment()
+    {
+        Navigation.NavigateTo("/patient/add-appointment");
+    }
+
+    private void HandleCancel(long appointmentId)
+    {
+        try
+        {
+            using var connection = DatabaseConnection.GetConnection();
+            connection.Open();
+
+            string query = @"
+                UPDATE Appointments
+                SET status = 'Cancelled'
+                WHERE id = @AppointmentId AND status = 'Booked'";
+            using var command = new MySqlCommand(query, connection);
+            command.Parameters.AddWithValue("@AppointmentId", appointmentId);
+            int rowsAffected = command.ExecuteNonQuery();
+
+            if (rowsAffected > 0)
+            {
+                LoadAppointments(UserStateService.GetCurrentUser().Id);
+            }
+            else
+            {
+                ErrorMessage = "Failed to cancel appointment. It may have already been cancelled or checked in.";
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to cancel appointment: {ex.Message}";
+        }
+    }
+
+    
+}

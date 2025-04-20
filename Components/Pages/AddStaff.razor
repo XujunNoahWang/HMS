@@ -1,0 +1,430 @@
+﻿@page "/admin/add-staff"
+@inherits AddEntityBase
+@using HMS.Models
+@using MySqlConnector
+
+<PageTitle>Add Staff</PageTitle>
+
+<div class="container">
+    <h3>Add New Staff</h3>
+
+    @if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="alert @(IsSuccessMessage ? "alert-success" : "alert-danger")">@ErrorMessage</div>
+    }
+
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <div class="form-group">
+                <label for="id">Staff ID (Auto-generated)</label>
+                <input id="id" type="text" class="form-control" value="@StaffId" readonly style="width: 100%; font-size: 1rem;" />
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <div class="form-group">
+                <label for="password">Password (Auto-generated)</label>
+                <input id="password" type="text" class="form-control" value="**********" readonly style="width: 100%; font-size: 1rem;" />
+                <small class="form-text text-muted">Password will be sent to staff by email.</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <div class="form-group">
+                <label for="role">Role</label>
+                <select id="role" class="form-control" @bind="RoleType" style="width: 100%; font-size: 1rem;">
+                    <option value="">-- Select Role --</option>
+                    <option value="@Role.Doctor">Doctor</option>
+                    <option value="@Role.Nurse">Nurse</option>
+                    <option value="@Role.Cashier">Cashier</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    @* Different role, different input option*@
+    @if (RoleType != default(Role))
+    {
+        @if (RoleType == Role.Doctor)
+        {
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="department">Department</label>
+                        <select id="department" class="form-control" @bind="SelectedDepartment" style="width: 100%; font-size: 1rem;">
+                            <option value="">-- Select Department --</option>
+                            @foreach (var dept in Departments)
+                            {
+                                <option value="@dept">@dept</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (RoleType == Role.Doctor || RoleType == Role.Nurse)
+        {
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="level">Level</label>
+                        <select id="level" class="form-control" @bind="Level" style="width: 100%; font-size: 1rem;">
+                            <option value="">-- Select Level --</option>
+                            <option value="Intern">Intern</option>
+                            <option value="Assistant">Assistant</option>
+                            <option value="Junior">Junior</option>
+                            <option value="General">General</option>
+                            <option value="Senior">Senior</option>
+                            <option value="Lead">Lead</option>
+                            <option value="Chief">Chief</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label for="firstName">First Name</label>
+                    <input id="firstName" type="text" class="form-control" @bind="FirstName" maxlength="50" style="width: 100%; font-size: 1rem;" />
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label for="lastName">Last Name</label>
+                    <input id="lastName" type="text" class="form-control" @bind="LastName" maxlength="50" style="width: 100%; font-size: 1rem;" />
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label for="gender">Gender</label>
+                    <select id="gender" class="form-control" @bind="Gender" style="width: 100%; font-size: 1rem;">
+                        <option value="">-- Select Gender --</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label for="birthDate">Date of Birth</label>
+                    <input id="birthDate" type="date" class="form-control" @bind="BirthDate" style="width: 100%; font-size: 1rem;" />
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input id="email" type="email" class="form-control" @bind="Email" style="width: 100%; font-size: 1rem;" />
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label for="phone">Phone</label>
+                    <input id="phone" type="text" class="form-control" @bind="Phone" style="width: 100%; font-size: 1rem;" />
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label for="hireDate">Hire Date</label>
+                    <input id="hireDate" type="date" class="form-control" @bind="HireDate" max="@(DateTime.Today.ToString("yyyy-MM-dd"))" style="width: 100%; font-size: 1rem;" />
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-auto">
+                <button class="btn btn-primary" @onclick="HandleSave">Save</button>
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-secondary" @onclick="HandleCancel">Cancel</button>
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .no-spinner::-webkit-inner-spin-button,
+    .no-spinner::-webkit-outer-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+
+    .no-spinner[type=number] {
+        -moz-appearance: textfield;
+    }
+</style>
+
+@code {
+	// Temporary variables for the form
+    private string StaffId { get; set; }
+    private string Password { get; set; }
+    private Role RoleType { get; set; }
+    private string Level { get; set; }
+    private string SelectedDepartment { get; set; }
+    private List<string> Departments { get; set; } = new List<string>();
+    private string FirstName { get; set; }
+    private string LastName { get; set; }
+    private string Gender { get; set; } 
+    private DateTime BirthDate { get; set; } = new DateTime(2000, 1, 1);
+    private string Email { get; set; }
+    private long? Phone { get; set; }
+    private DateTime HireDate { get; set; } = DateTime.Today;
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+		GenerateNewStaffIdAndPassword(); // Get new Staff ID and Password
+        LoadDepartments();
+    }
+
+    private void LoadDepartments()
+    {
+        try
+        {
+            using var connection = DatabaseConnection.GetConnection();
+            connection.Open();
+
+            string query = "SELECT name FROM Departments WHERE closure_date IS NULL";
+            using var command = new MySqlCommand(query, connection);
+            using var reader = command.ExecuteReader();
+            Departments.Clear();
+            while (reader.Read())
+            {
+                Departments.Add(reader.GetString("name"));
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to load departments: {ex.Message}";
+        }
+    }
+
+    private void GenerateNewStaffIdAndPassword()
+    {
+        try
+        {
+            using var connection = DatabaseConnection.GetConnection();
+            connection.Open();
+
+			string query = "SELECT MAX(id) FROM Users"; // Get the maximum ID from Users table
+            using var command = new MySqlCommand(query, connection);
+            var maxId = command.ExecuteScalar();
+
+            int newId;
+            if (maxId == DBNull.Value)
+            {
+				newId = 198906041; // The first ID to be assigned
+            }
+            else
+            {
+                newId = Convert.ToInt32(maxId) + 1;
+            }
+
+            if (newId < 100000000 || newId > 999999999)
+            {
+                throw new Exception($"Generated ID ({newId}) is not a 9-digit number. Maximum ID limit reached.");
+            }
+
+            StaffId = newId.ToString();
+            Password = GenerateRandomPassword();
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to generate staff ID: {ex.Message}";
+        }
+    }
+
+    private string GenerateRandomPassword()
+    {
+        const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        Random random = new Random();
+        return new string(Enumerable.Repeat(chars, 8)
+            .Select(s => s[random.Next(s.Length)]).ToArray());
+    }
+
+	// Validate and save the new staff member
+    private async Task HandleSave()
+    {
+        ErrorMessage = null;
+        IsSuccessMessage = false;
+
+        if (RoleType == default(Role))
+        {
+            ErrorMessage = "Role is required.";
+            return;
+        }
+
+        if ((RoleType == Role.Doctor || RoleType == Role.Nurse) && string.IsNullOrWhiteSpace(Level))
+        {
+            ErrorMessage = "Level is required for Doctors and Nurses.";
+            return;
+        }
+
+        if (RoleType == Role.Doctor && string.IsNullOrWhiteSpace(SelectedDepartment))
+        {
+            ErrorMessage = "Department is required for Doctors.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(FirstName) || string.IsNullOrWhiteSpace(LastName))
+        {
+            ErrorMessage = "First Name and Last Name are required.";
+            return;
+        }
+
+        if (string.IsNullOrEmpty(Gender))
+        {
+            ErrorMessage = "Gender is required.";
+            return;
+        }
+
+        if (!new[] { "Male", "Female" }.Contains(Gender))
+        {
+            ErrorMessage = "Invalid Gender value. Please select Male or Female.";
+            return;
+        }
+
+        if (BirthDate == default(DateTime))
+        {
+            ErrorMessage = "Date of Birth is required.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(Email) || !Email.Contains("@") || !Email.Contains("."))
+        {
+            ErrorMessage = "A valid Email is required.";
+            return;
+        }
+
+        if (Phone == null || Phone.ToString().Length != 10)
+        {
+            ErrorMessage = "A valid 10-digit Phone number is required.";
+            return;
+        }
+
+        if (HireDate == default(DateTime))
+        {
+            ErrorMessage = "Hire Date is required.";
+            return;
+        }
+
+        try
+        {
+            using var connection = DatabaseConnection.GetConnection();
+            await connection.OpenAsync();
+            using var transaction = connection.BeginTransaction();
+
+            try
+            {
+                // Check if StaffId already exists
+                string checkQuery = "SELECT COUNT(*) FROM Users WHERE id = @Id";
+                using var checkCommand = new MySqlCommand(checkQuery, connection, transaction);
+                checkCommand.Parameters.AddWithValue("@Id", int.Parse(StaffId));
+                long count = (long)await checkCommand.ExecuteScalarAsync();
+                if (count > 0)
+                {
+                    throw new Exception("Generated Staff ID already exists.");
+                }
+
+                // Insert into Users table
+                string userQuery = @"
+                    INSERT INTO Users (id, first_name, last_name, email, phone, password, gender, birth_date, role, status)
+                    VALUES (@Id, @FirstName, @LastName, @Email, @Phone, @Password, @Gender, @BirthDate, @Role, 'Active')";
+                using var userCommand = new MySqlCommand(userQuery, connection, transaction);
+                userCommand.Parameters.AddWithValue("@Id", int.Parse(StaffId));
+                userCommand.Parameters.AddWithValue("@FirstName", FirstName);
+                userCommand.Parameters.AddWithValue("@LastName", LastName);
+                userCommand.Parameters.AddWithValue("@Email", Email);
+                userCommand.Parameters.AddWithValue("@Phone", Phone.Value);
+                userCommand.Parameters.AddWithValue("@Password", Password);
+                userCommand.Parameters.AddWithValue("@Gender", Gender);
+                userCommand.Parameters.AddWithValue("@BirthDate", BirthDate);
+                userCommand.Parameters.AddWithValue("@Role", RoleType.ToString());
+                await userCommand.ExecuteNonQueryAsync();
+
+                // Insert into role-specific table
+                string roleQuery = RoleType switch
+                {
+                    Role.Doctor => @"
+                        INSERT INTO Doctors (user_id, specialty, level, hire_date, termination_date)
+                        VALUES (@UserId, @Specialty, @Level, @HireDate, NULL)",
+                    Role.Nurse => @"
+                        INSERT INTO Nurses (user_id, level, hire_date, termination_date)
+                        VALUES (@UserId, @Level, @HireDate, NULL)",
+                    Role.Cashier => @"
+                        INSERT INTO Cashiers (user_id, hire_date, termination_date)
+                        VALUES (@UserId, @HireDate, NULL)",
+                    _ => throw new Exception("Invalid role selected.")
+                };
+
+                using var roleCommand = new MySqlCommand(roleQuery, connection, transaction);
+                roleCommand.Parameters.AddWithValue("@UserId", int.Parse(StaffId));
+                if (RoleType == Role.Doctor)
+                {
+                    roleCommand.Parameters.AddWithValue("@Specialty", SelectedDepartment);
+                }
+                if (RoleType == Role.Doctor || RoleType == Role.Nurse)
+                {
+                    roleCommand.Parameters.AddWithValue("@Level", Level);
+                }
+                roleCommand.Parameters.AddWithValue("@HireDate", HireDate);
+                await roleCommand.ExecuteNonQueryAsync();
+
+                await transaction.CommitAsync();
+
+                HandleCancel();
+                GenerateNewStaffIdAndPassword();
+                ShowSuccessMessage("Staff added successfully.");
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to add staff: {ex.Message}";
+        }
+    }
+
+	// Clear input fields and reset state
+    protected override void HandleCancel()
+    {
+        RoleType = default;
+        Level = null;
+        SelectedDepartment = null;
+        FirstName = null;
+        LastName = null;
+        Gender = "";
+        BirthDate = new DateTime(2000, 1, 1);
+        Email = null;
+        Phone = null;
+        HireDate = DateTime.Today;
+        base.HandleCancel();
+    }
+}

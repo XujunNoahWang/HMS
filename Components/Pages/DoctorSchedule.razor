@@ -1,0 +1,289 @@
+﻿@page "/doctor/schedule"
+@inherits ScheduleBase
+@using HMS.Models
+@using MySqlConnector
+
+<PageTitle>My Schedule</PageTitle>
+
+<div class="container">
+    <div class="row mb-3">
+        <div class="col-auto">
+            <label for="patientId">Patient ID Number:</label>
+        </div>
+        <div class="col-auto">
+            <input id="patientId" type="text" class="form-control no-spinner" @bind="PatientId" style="width: 15ch;" />
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-primary" @onclick="HandleAccess">Access</button>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-purple" @onclick="HandleViewAll">View All My Appointments</button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="alert alert-danger">@ErrorMessage</div>
+    }
+
+    <div class="row mb-3">
+        <div class="col-auto">
+            <button class="btn btn-primary" @onclick="HandleNewAppointment">New Appointment</button>
+        </div>
+    </div>
+
+    @if (Appointments.Any())
+    {
+        <table class="table table-bordered fixed-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Time</th>
+                    <th>Patient ID</th>
+                    <th>Name</th>
+                    <th>Gender</th>
+                    <th>Age</th>
+                    <th>Appointment Status</th>
+                    <th>Phone</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var appointment in Appointments)
+                {
+                    <tr>
+                        <td>@appointment.Time.ToString("MMM d, yyyy")</td>
+                        <td>@appointment.Time.ToString("h:mm tt")</td>
+                        <td>
+                            <a href="@($"{PatientLinkPrefix}?patientId={appointment.PatientId}")" class="text-primary">@appointment.PatientId</a>
+                        </td>
+                        <td>@appointment.PatientName</td>
+                        <td>@appointment.Gender.ToString()</td>
+                        <td>@appointment.Age</td>
+                        <td>
+                            @appointment.Status
+                            <div class="btn-group btn-group-sm" role="group">
+                                <button type="button" class="btn btn-success" @onclick="() => UpdateAppointmentStatus(appointment.Id, AppointmentStatus.CheckedIn)"
+                                        disabled="@(appointment.Status != AppointmentStatus.Booked)">
+                                    Check-In
+                                </button>
+                                <button type="button" class="btn btn-danger" @onclick="() => UpdateAppointmentStatus(appointment.Id, AppointmentStatus.Cancelled)"
+                                        disabled="@(appointment.Status != AppointmentStatus.Booked)">
+                                    Cancel
+                                </button>
+                                <button type="button" class="btn btn-warning" @onclick="() => UpdateAppointmentStatus(appointment.Id, AppointmentStatus.NoShow)"
+                                        disabled="@(appointment.Status != AppointmentStatus.Booked)">
+                                    No Show
+                                </button>
+                            </div>
+                        </td>
+                        <td>@appointment.FormattedPhone</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    else if (PatientId != null)
+    {
+        <p>No appointments found for this patient.</p>
+    }
+</div>
+
+<style>
+    .fixed-table {
+        table-layout: fixed;
+        width: 100%;
+    }
+
+        .fixed-table th,
+        .fixed-table td {
+            overflow-wrap: break-word;
+            word-break: break-word;
+            padding: 8px;
+        }
+
+            .fixed-table th:nth-child(1),
+            .fixed-table td:nth-child(1) {
+                width: 12%;
+            }
+
+            .fixed-table th:nth-child(2),
+            .fixed-table td:nth-child(2) {
+                width: 10%;
+            }
+
+            .fixed-table th:nth-child(3),
+            .fixed-table td:nth-child(3) {
+                width: 12%;
+            }
+
+            .fixed-table th:nth-child(4),
+            .fixed-table td:nth-child(4) {
+                width: 15%;
+            }
+
+            .fixed-table th:nth-child(5),
+            .fixed-table td:nth-child(5) {
+                width: 10%;
+            }
+
+            .fixed-table th:nth-child(6),
+            .fixed-table td:nth-child(6) {
+                width: 8%;
+            }
+
+            .fixed-table th:nth-child(7),
+            .fixed-table td:nth-child(7) {
+                width: 18%;
+            }
+
+            .fixed-table th:nth-child(8),
+            .fixed-table td:nth-child(8) {
+                width: 15%;
+            }
+
+        .fixed-table th {
+            text-align: center;
+        }
+
+        .fixed-table td {
+            text-align: left;
+        }
+
+    .no-spinner::-webkit-inner-spin-button,
+    .no-spinner::-webkit-outer-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+
+    .no-spinner[type=number] {
+        -moz-appearance: textfield;
+    }
+
+    .btn-purple {
+        background-color: #6f42c1;
+        border-color: #6f42c1;
+        color: white;
+    }
+
+        .btn-purple:hover {
+            background-color: #563d7c;
+            border-color: #563d7c;
+            color: white;
+        }
+
+        .btn-purple:focus, .btn-purple.focus {
+            box-shadow: 0 0 0 0.2rem rgba(111, 66, 193, 0.5);
+        }
+
+        .btn-purple.disabled, .btn-purple:disabled {
+            background-color: #6f42c1;
+            border-color: #6f42c1;
+            opacity: 0.65;
+        }
+
+        .btn-purple:not(:disabled):not(.disabled):active,
+        .btn-purple:not(:disabled):not(.disabled).active {
+            background-color: #563d7c;
+            border-color: #563d7c;
+        }
+</style>
+
+@code {
+    protected override Role ExpectedRole => Role.Doctor;
+
+    protected override void LoadAppointments(int? patientId)
+    {
+        base.LoadAppointments(patientId);
+
+        // Check permission for specific patient
+        if (patientId.HasValue && !Appointments.Any())
+        {
+            try
+            {
+                var currentUser = UserStateService.GetCurrentUser();
+                if (currentUser == null)
+                {
+                    ErrorMessage = "Doctor not logged in.";
+                    return;
+                }
+
+                using var connection = DatabaseConnection.GetConnection();
+                connection.Open();
+
+				// Verify permission to view appointments, the doctor must be the one who created the appointment, meaning he can only see his own patients' appointments
+                string checkQuery = @"
+                    SELECT COUNT(*)
+                    FROM Appointments
+                    WHERE patient_id = @PatientId AND doctor_id != @DoctorId";
+                using var checkCommand = new MySqlCommand(checkQuery, connection);
+                checkCommand.Parameters.AddWithValue("@PatientId", patientId.Value);
+                checkCommand.Parameters.AddWithValue("@DoctorId", currentUser.Id);
+                long count = (long)checkCommand.ExecuteScalar();
+                if (count > 0)
+                {
+                    ErrorMessage = "You do not have permission to view this patient's appointments.";
+                }
+            }
+            catch (Exception ex)
+            {
+                ErrorMessage = $"Failed to check permissions: {ex.Message}";
+                Appointments.Clear();
+            }
+        }
+    }
+
+    private void UpdateAppointmentStatus(long appointmentId, AppointmentStatus targetStatus)
+    {
+        try
+        {
+            var currentUser = UserStateService.GetCurrentUser();
+            if (currentUser == null)
+            {
+                ErrorMessage = "Doctor not logged in.";
+                return;
+            }
+
+            using var connection = DatabaseConnection.GetConnection();
+            connection.Open();
+
+            // Verify permission to update appointment
+            string checkQuery = @"
+                SELECT COUNT(*)
+                FROM Appointments
+                WHERE id = @AppointmentId AND doctor_id = @DoctorId";
+            using var checkCommand = new MySqlCommand(checkQuery, connection);
+            checkCommand.Parameters.AddWithValue("@AppointmentId", appointmentId);
+            checkCommand.Parameters.AddWithValue("@DoctorId", currentUser.Id);
+            long count = (long)checkCommand.ExecuteScalar();
+            if (count == 0)
+            {
+                ErrorMessage = "You do not have permission to update this appointment.";
+                return;
+            }
+
+            // Update appointment status
+            string query = @"
+                UPDATE Appointments
+                SET status = @Status
+                WHERE id = @AppointmentId";
+            using var command = new MySqlCommand(query, connection);
+            command.Parameters.AddWithValue("@Status", targetStatus.ToString());
+            command.Parameters.AddWithValue("@AppointmentId", appointmentId);
+
+            command.ExecuteNonQuery();
+
+            // Reload appointments to reflect changes
+            LoadAppointments(string.IsNullOrWhiteSpace(PatientId) ? null : int.Parse(PatientId));
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to update appointment status: {ex.Message}";
+        }
+    }
+
+    private void HandleNewAppointment()
+    {
+        // Navigate to new appointment page
+        Navigation.NavigateTo("/doctor/schedule/new-appointment");
+    }
+}

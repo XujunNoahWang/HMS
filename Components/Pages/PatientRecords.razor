@@ -1,0 +1,179 @@
+﻿@page "/patient/records"
+@inherits RecordsBase
+@using HMS.Data
+@using HMS.Models
+@using MySqlConnector
+
+<PageTitle>My Records</PageTitle>
+
+<div class="container">
+    @if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="alert alert-danger">@ErrorMessage</div>
+    }
+
+    @if (VisitRecords.Any())
+    {
+        <table class="table table-bordered fixed-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Disease Type</th>
+                    <th>Symptoms</th>
+                    <th>Examinations</th>
+                    <th>Diagnosis</th>
+                    <th>Prescription</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var record in VisitRecords)
+                {
+                    <tr>
+                        <td>@record.VisitDate.ToString("MMM d, yyyy")</td>
+                        <td>@record.DiseaseType</td>
+                        <td>@record.Symptoms</td>
+                        <td>@(record.Examinations ?? "N/A")</td>
+                        <td>@record.Diagnosis</td>
+                        <td>
+                            @if (string.IsNullOrEmpty(record.Prescription))
+                            {
+                                @:N/A
+                            }
+                            else
+                            {
+                                foreach (var line in record.Prescription.Split('\n'))
+                                {
+                                    <div>@line</div>
+                                }
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    else
+    {
+        <div class="alert alert-info">@EmptyRecordsMessage</div>
+    }
+</div>
+
+<style>
+    .fixed-table {
+        table-layout: fixed;
+        width: 100%;
+    }
+
+        .fixed-table th,
+        .fixed-table td {
+            overflow-wrap: break-word;
+            word-break: break-word;
+            padding: 8px;
+            font-size: 1rem;
+        }
+
+            .fixed-table th:nth-child(1),
+            .fixed-table td:nth-child(1) {
+                width: 12%;
+            }
+
+            .fixed-table th:nth-child(2),
+            .fixed-table td:nth-child(2) {
+                width: 18%;
+            }
+
+            .fixed-table th:nth-child(3),
+            .fixed-table td:nth-child(3) {
+                width: 18%;
+            }
+
+            .fixed-table th:nth-child(4),
+            .fixed-table td:nth-child(4) {
+                width: 18%;
+            }
+
+            .fixed-table th:nth-child(5),
+            .fixed-table td:nth-child(5) {
+                width: 18%;
+            }
+
+            .fixed-table th:nth-child(6),
+            .fixed-table td:nth-child(6) {
+                width: 16%;
+            }
+
+        .fixed-table th {
+            text-align: center;
+        }
+
+        .fixed-table td {
+            text-align: left;
+        }
+</style>
+
+@code {
+    [Inject]
+    private DatabaseConnection DatabaseConnection { get; set; }
+
+    protected override Role ExpectedRole => Role.Patient;
+
+    protected override string EmptyRecordsMessage => "No visit records found.";
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        var currentUser = UserStateService.GetCurrentUser();
+        if (currentUser != null)
+        {
+            LoadRecords(currentUser.Id);
+        }
+    }
+
+    protected override void LoadRecords(int patientId)
+    {
+        try
+        {
+            using var connection = DatabaseConnection.GetConnection();
+            connection.Open();
+
+            string recordsQuery = @"
+                SELECT vr.id, vr.patient_id, vr.visit_date, vr.symptoms, vr.examinations, vr.disease_type, vr.diagnosis, vr.doctor_id,
+                    GROUP_CONCAT(
+                        CONCAT(p.type, ': ', p.name, ', Qty: ', p.quantity, ', $', p.price)
+                        SEPARATOR '\n'
+                    ) AS prescription
+                FROM VisitRecords vr
+                LEFT JOIN Prescriptions p ON vr.id = p.visit_id
+                WHERE vr.patient_id = @PatientId
+                GROUP BY vr.id";
+            using var recordsCommand = new MySqlCommand(recordsQuery, connection);
+            recordsCommand.Parameters.AddWithValue("@PatientId", patientId);
+            using var recordsReader = recordsCommand.ExecuteReader();
+            VisitRecords.Clear();
+            while (recordsReader.Read())
+            {
+                var record = new VisitRecord
+                    {
+                        Id = recordsReader.GetInt64("id"),
+                        PatientId = recordsReader.GetInt32("patient_id"),
+                        VisitDate = recordsReader.GetDateTime("visit_date"),
+                        Symptoms = recordsReader.GetString("symptoms"),
+                        Examinations = recordsReader.IsDBNull(recordsReader.GetOrdinal("examinations")) ? null : recordsReader.GetString("examinations"),
+                        DiseaseType = recordsReader.GetString("disease_type"),
+                        Diagnosis = recordsReader.GetString("diagnosis"),
+                        DoctorId = recordsReader.GetInt32("doctor_id"),
+                        Prescription = recordsReader.IsDBNull(recordsReader.GetOrdinal("prescription")) ? null : recordsReader.GetString("prescription"),
+                        Prescriptions = new List<Prescription>() // Empty list for queried records
+                    };
+                VisitRecords.Add(record);
+
+                
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to load records: {ex.Message}";
+            VisitRecords.Clear();
+        }
+    }
+}

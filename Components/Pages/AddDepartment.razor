@@ -1,0 +1,122 @@
+﻿@page "/admin/add-department"
+@inherits AddEntityBase
+@using HMS.Models
+@using MySqlConnector
+
+<PageTitle>Add Department</PageTitle>
+
+<div class="container">
+    <h3>Add New Department</h3>
+
+    @if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="alert @(IsSuccessMessage ? "alert-success" : "alert-danger")">@ErrorMessage</div>
+    }
+
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <div class="form-group">
+                <label for="name">Department Name</label>
+                <input id="name" type="text" class="form-control" @bind="DepartmentName" maxlength="50" style="width: 100%; font-size: 1rem;" />
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <div class="form-group">
+                <label for="description">Description (Optional)</label>
+                <textarea id="description" class="form-control" @bind="Description" rows="3" style="width: 100%; font-size: 1rem;"></textarea>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <div class="form-group">
+                <label for="establishmentDate">Establishment Date</label>
+                <input id="establishmentDate" type="date" class="form-control" @bind="EstablishmentDate" style="width: 100%; font-size: 1rem;" />
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-auto">
+            <button class="btn btn-primary" @onclick="HandleSave">Save</button>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-secondary" @onclick="HandleCancel">Cancel</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string DepartmentName { get; set; }
+    private string Description { get; set; }
+    private DateTime EstablishmentDate { get; set; } = DateTime.Today;
+
+	// Add new department after validation
+    private async Task HandleSave()
+    {
+        ErrorMessage = null;
+        IsSuccessMessage = false;
+
+        if (string.IsNullOrWhiteSpace(DepartmentName))
+        {
+            ErrorMessage = "Department Name is required.";
+            return;
+        }
+
+        if (EstablishmentDate == default(DateTime))
+        {
+            ErrorMessage = "Establishment Date is required.";
+            return;
+        }
+
+        try
+        {
+            using var connection = DatabaseConnection.GetConnection();
+            await connection.OpenAsync();
+
+            // Check if department name already exists
+            string checkQuery = "SELECT COUNT(*) FROM Departments WHERE name = @Name AND closure_date IS NULL";
+            using var checkCommand = new MySqlCommand(checkQuery, connection);
+            checkCommand.Parameters.AddWithValue("@Name", DepartmentName);
+            long count = (long)await checkCommand.ExecuteScalarAsync();
+            if (count > 0)
+            {
+                ErrorMessage = "A department with this name already exists.";
+                return;
+            }
+
+            string query = @"
+                INSERT INTO Departments (name, description, establishment_date, closure_date)
+                VALUES (@Name, @Description, @EstablishmentDate, NULL)";
+            using var command = new MySqlCommand(query, connection);
+            command.Parameters.AddWithValue("@Name", DepartmentName);
+            command.Parameters.AddWithValue("@Description", string.IsNullOrWhiteSpace(Description) ? (object)DBNull.Value : Description);
+            command.Parameters.AddWithValue("@EstablishmentDate", EstablishmentDate);
+
+            await command.ExecuteNonQueryAsync();
+
+            // Clear input fields
+            HandleCancel();
+
+            // Show success message
+            ShowSuccessMessage("Department added successfully.");
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to save department: {ex.Message}";
+            IsSuccessMessage = false;
+        }
+    }
+
+    protected override void HandleCancel()
+    {
+        DepartmentName = null;
+        Description = null;
+        EstablishmentDate = DateTime.Today;
+        base.HandleCancel();
+    }
+}

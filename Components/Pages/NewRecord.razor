@@ -1,0 +1,265 @@
+﻿@page "/doctor/patients/{PatientId:int}/new-record"
+@inherits RecordsBase
+@using HMS.Services
+@using HMS.Models
+
+<PageTitle>Add New Record</PageTitle>
+
+<div class="container">
+    <h3>Add New Record for Patient ID: @PatientId</h3>
+
+    @if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="alert alert-danger">@ErrorMessage</div>
+    }
+
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <div class="form-group">
+                <label for="visitDate">Visit Date</label>
+                <input id="visitDate" type="text" class="form-control" value="@Record.VisitDate.ToString("yyyy-MM-dd")" readonly style="width: 100%; font-size: 1rem;" /> <!--Only today is allowed-->
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <div class="form-group">
+                <label for="diseaseType">Disease Type</label>
+                <input id="diseaseType" type="text" class="form-control" @bind="Record.DiseaseType" maxlength="50" style="width: 100%; font-size: 1rem;" />
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <div class="form-group">
+                <label for="symptoms">Symptoms (max 1000 characters)</label>
+                <textarea id="symptoms" class="form-control" @bind="Record.Symptoms" rows="3" maxlength="1000" style="width: 100%; font-size: 1rem;"></textarea>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <div class="form-group">
+                <label for="examinations">Examinations (Optional, max 1000 characters)</label>
+                <textarea id="examinations" class="form-control" @bind="Record.Examinations" rows="3" maxlength="1000" style="width: 100%; font-size: 1rem;"></textarea>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <div class="form-group">
+                <label for="diagnosis">Diagnosis (max 1000 characters)</label>
+                <textarea id="diagnosis" class="form-control" @bind="Record.Diagnosis" rows="3" maxlength="1000" style="width: 100%; font-size: 1rem;"></textarea>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <div class="form-group">
+                <label for="visitType">Visit Type</label>
+                <select id="visitType" class="form-control" @bind="VisitType" style="width: 100%; font-size: 1rem;">
+                    <option value="Outpatient">Outpatient</option>
+                    <option value="Inpatient">Inpatient</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <br />
+
+    <!--The doctor may or may not prescribe-->
+    <h4>Prescriptions (Optional)</h4>
+    @foreach (var prescription in Record.Prescriptions)
+    {
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label>Type</label>
+                    <select class="form-control" @bind="prescription.Type" @bind:after="@(() => ResetPrescription(prescription))" style="width: 100%; font-size: 1rem;">
+                        <option value="">Select Type</option>
+                        <option value="Medicine">Medicine</option>
+                        <option value="Tests">Tests</option>
+                        <option value="Surgery">Surgery</option>
+                        <option value="Equipment">Equipment</option>
+                    </select>
+                </div>
+                @if (!string.IsNullOrEmpty(prescription.Type))
+                {
+                    <div class="form-group">
+                        <label>Name</label>
+                        <select class="form-control" @bind="prescription.Name" @bind:after="@(() => UpdatePrice(prescription))" style="width: 100%; font-size: 1rem;">
+                            <option value="">Select Name</option>
+                            @foreach (var name in GetNamesForType(prescription.Type))
+                            {
+                                <option value="@name">@name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Quantity</label>
+                        <select class="form-control" @bind="prescription.Quantity" style="width: 100%; font-size: 1rem;">
+                            @for (int i = 1; i <= 10; i++)
+                            {
+                                <option value="@i">@i</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Price</label>
+                        <input type="text" class="form-control" value="@(prescription.Price == 0 ? "N/A" : $"${prescription.Price:F2}")" readonly style="width: 100%; font-size: 1rem;" />
+                    </div>
+                    <div style="font-size: 1rem;">Total: @(prescription.Price == 0 ? "N/A" : $"${(prescription.Quantity * prescription.Price):F2}")</div>
+                }
+                <button class="btn btn-danger btn-sm" @onclick="() => RemovePrescription(prescription)">Remove</button>
+            </div>
+        </div>
+    }
+    <div class="row mb-3">
+        <div class="col-auto">
+            <button class="btn btn-secondary" @onclick="AddPrescription">Add Prescription</button>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-auto">
+            <button class="btn btn-primary" @onclick="HandleSave">Save</button>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-secondary" @onclick="HandleCancel">Cancel</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] // Parameter to receive PatientId from the URL route
+    public int PatientId { get; set; }
+
+    [Inject]
+    private RecordService RecordService { get; set; }
+
+    // The visit record being created, initialized with today's date and empty prescriptions list
+    private VisitRecord Record { get; set; } = new VisitRecord { VisitDate = DateTime.Today, Prescriptions = new List<Prescription>() };
+    private string VisitType { get; set; } = "Outpatient";
+
+    // Stores item data (name and price) for each prescription type (Medicine, Tests, Surgery, Equipment)
+    private Dictionary<string, List<(string Name, decimal Price)>> ItemData { get; set; } = new Dictionary<string, List<(string, decimal)>>
+    {
+        { "Medicine", new List<(string, decimal)>() },
+        { "Tests", new List<(string, decimal)>() },
+        { "Surgery", new List<(string, decimal)>() },
+        { "Equipment", new List<(string, decimal)>() }
+    };
+
+    protected override Role ExpectedRole => Role.Doctor;
+
+    protected override async void OnInitialized()
+    {
+        base.OnInitialized();
+        await LoadItemDataAsync();
+    }
+
+    private async Task LoadItemDataAsync()
+    {
+        try
+        {
+            ItemData = await RecordService.LoadItemDataAsync();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to load item data: {ex.Message}";
+        }
+    }
+
+    private List<string> GetNamesForType(string type)
+    {
+        return ItemData[type].Select(item => item.Name).Distinct().ToList();
+    }
+
+    private void ResetPrescription(Prescription prescription)
+    {
+        prescription.Name = "";
+        prescription.Quantity = 1;
+        prescription.Price = 0;
+    }
+
+    private void UpdatePrice(Prescription prescription)
+    {
+        if (!string.IsNullOrEmpty(prescription.Name))
+        {
+            var item = ItemData[prescription.Type].FirstOrDefault(x => x.Name == prescription.Name);
+            prescription.Price = item.Price;
+        }
+        else
+        {
+            prescription.Price = 0;
+        }
+    }
+
+    private void AddPrescription()
+    {
+        Record.Prescriptions.Add(new Prescription());
+    }
+
+    private void RemovePrescription(Prescription prescription)
+    {
+        Record.Prescriptions.Remove(prescription);
+    }
+
+    private async void HandleSave()
+    {
+        ErrorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(Record.DiseaseType))
+        {
+            ErrorMessage = "Disease Type is required.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(Record.Symptoms))
+        {
+            ErrorMessage = "Symptoms are required.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(Record.DiseaseType))
+        {
+            ErrorMessage = "Diagnosis is required.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(VisitType) || (VisitType != "Outpatient" && VisitType != "Inpatient"))
+        {
+            ErrorMessage = "Invalid Visit Type.";
+            return;
+        }
+
+        var currentUser = UserStateService.GetCurrentUser();
+        if (currentUser == null)
+        {
+            ErrorMessage = "Doctor not logged in.";
+            return;
+        }
+
+        try
+        {
+            await RecordService.AddVisitRecordAsync(PatientId, Record, currentUser.Id, VisitType);
+            Navigation.NavigateTo($"/doctor/patients?patientId={PatientId}", forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to save record: {ex.Message}";
+        }
+    }
+
+    private void HandleCancel()
+    {
+        // Navigate back to patient records page
+        Navigation.NavigateTo($"/doctor/patients?patientId={PatientId}");
+    }
+}

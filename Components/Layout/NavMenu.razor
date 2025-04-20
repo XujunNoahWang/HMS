@@ -1,0 +1,160 @@
+﻿@using HMS.Services
+@using HMS.Models
+@inject UserStateService UserStateService
+@inject NavigationManager Navigation
+@implements IDisposable
+@*The account will be changed rapidly, so it requires a method to free the memory, otherwise, the app will be very slow.*@
+
+<div class="top-row ps-3 navbar navbar-dark">
+	<div class="container-fluid">
+		@*Making the navmenu more personal*@
+		@if (UserStateService.GetCurrentUser() != null)
+		{
+			<a class="navbar-brand">Welcome, @(UserStateService.GetCurrentUser().FirstName) @(UserStateService.GetCurrentUser().LastName)</a>
+		}
+		else
+		{
+			<a class="navbar-brand">HMS</a>
+		}
+	</div>
+</div>
+
+<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+
+<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+	<nav class="flex-column">
+		@if (UserStateService.GetCurrentUser() != null)
+		{
+			var currentUser = UserStateService.GetCurrentUser();
+			<div class="nav-item px-3">
+				@*Users can click "Dashboard" to go back to their welcome page, which can serve as a screensaver*@
+				<NavLink class="nav-link" href="@currentUser.GetDashboardRoute()" Match="NavLinkMatch.All">
+					<span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Dashboard
+				</NavLink>
+			</div>
+
+			@*Different role, diffrent UI*@
+			@if (currentUser.Role == Role.Doctor)
+			{
+				<div class="nav-item px-3">
+					<NavLink class="nav-link" href="/doctor/patients">
+						<span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> My Patients
+					</NavLink>
+				</div>
+				<div class="nav-item px-3">
+					<NavLink class="nav-link" href="/doctor/schedule">
+						<span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> My Schedule
+					</NavLink>
+				</div>
+			}
+			else if (currentUser.Role == Role.Nurse)
+			{
+				<div class="nav-item px-3">
+					<NavLink class="nav-link" href="/nurse/patients">
+						<span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> My Patients
+					</NavLink>
+				</div>
+				<div class="nav-item px-3">
+					<NavLink class="nav-link" href="/nurse/schedule">
+						<span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> My Schedule
+					</NavLink>
+				</div>
+			}
+			else if (currentUser.Role == Role.Cashier)
+			{
+				<div class="nav-item px-3">
+					<NavLink class="nav-link" href="/cashier/payments">
+						<span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Payment Management
+					</NavLink>
+				</div>
+			}
+			else if (currentUser.Role == Role.Patient)
+			{
+				<div class="nav-item px-3">
+					<NavLink class="nav-link" href="/patient/records">
+						<span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> My Records
+					</NavLink>
+				</div>
+				<div class="nav-item px-3">
+					<NavLink class="nav-link" href="/patient/appointments">
+						<span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> My Appointments
+					</NavLink>
+				</div>
+			}
+			else if (currentUser.Role == Role.Admin)
+			{
+				<div class="nav-item px-3">
+					<div class="nav-header">Dept. Management</div>
+				</div>
+				<div class="nav-item px-3 nav-subitem">
+					<NavLink class="nav-link" href="/admin/add-department">
+						<span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Add Department
+					</NavLink>
+				</div>
+				<div class="nav-item px-3 nav-subitem">
+					<NavLink class="nav-link" href="/admin/edit-department">
+						<span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Edit Department
+					</NavLink>
+				</div>
+				<div class="nav-item px-3">
+					<div class="nav-header">Staff Management</div>
+				</div>
+				<div class="nav-item px-3 nav-subitem">
+					<NavLink class="nav-link" href="/admin/add-staff">
+						<span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Add Staff
+					</NavLink>
+				</div>
+				<div class="nav-item px-3 nav-subitem">
+					<NavLink class="nav-link" href="/admin/edit-staff">
+						<span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Edit Staff
+					</NavLink>
+				</div>
+			}
+
+			<!-- Logout button at the bottom -->
+			<div class="nav-item px-3 mt-auto">
+				<button class="nav-link btn btn-link" @onclick="HandleLogout">
+					<span class="bi bi-box-arrow-right-nav-menu" aria-hidden="true"></span> Logout
+				</button>
+			</div>
+		}
+		else
+		{
+			<div class="nav-item px-3">
+				<NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+					<span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Login
+				</NavLink>
+			</div>
+		}
+	</nav>
+</div>
+
+@code {
+	// This code ensures that only logged-in users can access protected pages .
+	protected override void OnInitialized()
+	{
+		UserStateService.OnUserChanged += UpdateUserState;
+
+		var currentUri = Navigation.Uri;
+		if (UserStateService.GetCurrentUser() == null && !currentUri.EndsWith("/") && !currentUri.Contains("/login/"))
+		{
+			Navigation.NavigateTo("/", forceLoad: true);
+		}
+	}
+
+	private void UpdateUserState()
+	{
+		StateHasChanged();
+	}
+
+	private void HandleLogout()
+	{
+		UserStateService.ClearCurrentUser();
+		Navigation.NavigateTo("/", forceLoad: true);
+	}
+
+	public void Dispose()
+	{
+		UserStateService.OnUserChanged -= UpdateUserState;
+	}
+}

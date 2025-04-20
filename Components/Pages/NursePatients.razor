@@ -1,0 +1,151 @@
+﻿@page "/nurse/patients"
+@inherits PatientsBase
+@using HMS.Models
+
+<PageTitle>My Patients</PageTitle>
+
+<div class="container">
+    <div class="row mb-3">
+        <div class="col-auto">
+            <label for="patientId">Patient ID Number:</label>
+        </div>
+        <div class="col-auto">
+            <input id="patientId" type="text" class="form-control no-spinner" @bind="PatientId" style="width: 15ch;" />
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-primary" @onclick="HandleAccess">Access</button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="alert alert-danger">@ErrorMessage</div>
+    }
+
+    @if (Patient != null)
+    {
+        <div class="row mb-3 align-items-center">
+            <div class="col-auto">
+                <h4>@Patient.FirstName @Patient.LastName</h4>
+            </div>
+            <div class="col-auto">
+                <h4>@Patient.Gender</h4>
+            </div>
+            <div class="col-auto">
+                <h4>@CalculateAge(Patient.BirthDate) years old</h4>
+            </div>
+        </div>
+
+        @if (VisitRecords.Any())
+        {
+            <table class="table table-bordered fixed-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Disease Type</th>
+                        <th>Symptoms</th>
+                        <th>Examinations</th>
+                        <th>Diagnosis</th>
+                        <th>Prescription</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var record in VisitRecords)
+                    {
+                        <tr>
+                            <td>@record.VisitDate.ToString("MMM d, yyyy")</td>
+                            <td>@record.DiseaseType</td>
+                            <td>@record.Symptoms</td>
+                            <td>@(record.Examinations ?? "N/A")</td>
+                            <td>@record.Diagnosis</td>
+                            <td>
+                                @if (string.IsNullOrEmpty(record.Prescription))
+                                {
+                                    @:N/A
+                                }
+                                else
+                                {
+                                    foreach (var line in record.Prescription.Split('\n'))
+                                    {
+                                        <div>@line</div>
+                                    }
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <div class="alert alert-danger">@EmptyRecordsMessage</div>
+        }
+    }
+</div>
+
+<style>
+    .fixed-table {
+        table-layout: fixed;
+        width: 100%;
+    }
+
+        .fixed-table th,
+        .fixed-table td {
+            overflow-wrap: break-word;
+            word-break: break-word;
+            padding: 8px;
+            font-size: 1rem;
+        }
+
+            .fixed-table th:nth-child(1),
+            .fixed-table td:nth-child(1) {
+                width: 10%;
+            }
+
+            .fixed-table th:nth-child(2),
+            .fixed-table td:nth-child(2) {
+                width: 15%;
+            }
+
+            .fixed-table th:nth-child(3),
+            .fixed-table td:nth-child(3) {
+                width: 15%;
+            }
+
+            .fixed-table th:nth-child(4),
+            .fixed-table td:nth-child(4) {
+                width: 15%;
+            }
+
+            .fixed-table th:nth-child(5),
+            .fixed-table td:nth-child(5) {
+                width: 15%;
+            }
+
+            .fixed-table th:nth-child(6),
+            .fixed-table td:nth-child(6) {
+                width: 30%;
+            }
+
+        .fixed-table th {
+            text-align: center;
+        }
+
+        .fixed-table td {
+            text-align: left;
+        }
+
+    .no-spinner::-webkit-inner-spin-button,
+    .no-spinner::-webkit-outer-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+
+    .no-spinner[type=number] {
+        -moz-appearance: textfield;
+    }
+</style>
+
+@code {
+    protected override Role ExpectedRole => Role.Nurse;
+}

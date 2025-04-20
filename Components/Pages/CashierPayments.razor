@@ -1,0 +1,319 @@
+﻿@page "/cashier/payments"
+@using HMS.Services
+@using HMS.Models
+@using HMS.Data
+@using MySqlConnector
+@inject UserStateService UserStateService
+@inject NavigationManager Navigation
+@inject DatabaseConnection DatabaseConnection
+
+<PageTitle>Payment Management</PageTitle>
+
+<div class="container">
+    <div class="row mb-3">
+        <div class="col-auto">
+            <label for="patientId">Patient ID Number:</label>
+        </div>
+        <div class="col-auto">
+            <input id="patientId" type="text" class="form-control no-spinner" @bind="PatientId" style="width: 15ch;" />
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-primary" @onclick="HandleAccess">Access</button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="alert @(IsSuccessMessage ? "alert-success" : "alert-danger")">@ErrorMessage</div>
+    }
+
+    @* Display all the unpaid payment items if there is any*@
+    @if (Payments.Any())
+    {
+        <table class="table table-bordered fixed-table">
+            <thead>
+                <tr>
+                    <th>Created Date</th>
+                    <th>Patient ID</th>
+                    <th>Patient Name</th>
+                    <th>Prescription</th>
+                    <th>Total Amount</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var payment in Payments)
+                {
+                    <tr>
+                        <td>@payment.CreatedDate.ToString("MMM d, yyyy")</td>
+                        <td>@payment.PatientId</td>
+                        <td>@payment.PatientName</td>
+                        <td>
+                            @if (string.IsNullOrEmpty(payment.Prescription))
+                            {
+                                @:N/A
+                            }
+                            else
+                            {
+                                foreach (var line in payment.Prescription.Split('\n'))
+                                {
+                                    <div>@line</div>
+                                }
+                            }
+                        </td>
+                        <td>@($"${payment.TotalAmount:F2}")</td> @* With 2 decimals*@
+                        <td>
+                            <button class="btn btn-success btn-sm" @onclick="() => HandleCheckout(payment.PaymentId)">Check-out</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+<style>
+    .fixed-table {
+        table-layout: fixed;
+        width: 100%;
+    }
+
+        .fixed-table th,
+        .fixed-table td {
+            overflow-wrap: break-word;
+            word-break: break-word;
+            padding: 8px;
+            font-size: 1rem;
+        }
+
+            .fixed-table th:nth-child(1),
+            .fixed-table td:nth-child(1) {
+                width: 15%;
+            }
+
+            .fixed-table th:nth-child(2),
+            .fixed-table td:nth-child(2) {
+                width: 15%;
+            }
+
+            .fixed-table th:nth-child(3),
+            .fixed-table td:nth-child(3) {
+                width: 15%;
+            }
+
+            .fixed-table th:nth-child(4),
+            .fixed-table td:nth-child(4) {
+                width: 40%;
+            }
+
+            .fixed-table th:nth-child(5),
+            .fixed-table td:nth-child(5) {
+                width: 10%;
+            }
+
+            .fixed-table th:nth-child(6),
+            .fixed-table td:nth-child(6) {
+                width: 10%;
+            }
+
+        .fixed-table th {
+            text-align: center;
+        }
+
+        .fixed-table td {
+            text-align: left;
+        }
+
+    .no-spinner::-webkit-inner-spin-button,
+    .no-spinner::-webkit-outer-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+
+    .no-spinner[type=number] {
+        -moz-appearance: textfield;
+    }
+</style>
+
+@code {
+    [SupplyParameterFromQuery]
+    private string PatientId { get; set; }
+    private List<PaymentViewModel> Payments { get; set; } = new List<PaymentViewModel>();
+    private string ErrorMessage { get; set; }
+    private bool IsSuccessMessage { get; set; }
+
+    protected override void OnInitialized()
+    {
+        var currentUser = UserStateService.GetCurrentUser();
+        if (currentUser == null || currentUser.Role != Role.Cashier)
+        {
+            Navigation.NavigateTo("/", forceLoad: true);
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (!string.IsNullOrEmpty(PatientId))
+        {
+            HandleAccess();
+        }
+    }
+
+    private void HandleAccess()
+    {
+        ErrorMessage = null;
+        IsSuccessMessage = false;
+        Payments.Clear();
+
+        if (string.IsNullOrWhiteSpace(PatientId) || !int.TryParse(PatientId, out int patientId) || PatientId.Length != 9)
+        {
+            ErrorMessage = "Please enter a valid 9-digit numeric Patient ID.";
+            return;
+        }
+
+        try
+        {
+            using var connection = DatabaseConnection.GetConnection();
+            connection.Open();
+
+            var currentUser = UserStateService.GetCurrentUser();
+            if (currentUser == null || currentUser.Role != Role.Cashier)
+            {
+                ErrorMessage = "You do not have permission to access this page.";
+                return;
+            }
+            
+			@* Find the patient *@
+            string patientQuery = @"
+                SELECT first_name, last_name
+                FROM Users u
+                JOIN Patients p ON u.id = p.user_id
+                WHERE u.id = @PatientId AND u.role = 'Patient'";
+            string patientName = null;
+            using var patientCommand = new MySqlCommand(patientQuery, connection);
+            patientCommand.Parameters.AddWithValue("@PatientId", patientId);
+            using var patientReader = patientCommand.ExecuteReader();
+            if (patientReader.Read())
+            {
+                patientName = $"{patientReader.GetString("first_name")} {patientReader.GetString("last_name")}";
+            }
+            else
+            {
+                ErrorMessage = "Patient not found.";
+                return;
+            }
+            patientReader.Close();
+
+            @* Find the payment *@
+            string paymentQuery = @"
+                SELECT id, patient_id, visit_type, created_date
+                FROM Payments
+                WHERE patient_id = @PatientId AND status = 'Unpaid'
+                ORDER BY created_date DESC";
+            using var paymentCommand = new MySqlCommand(paymentQuery, connection);
+            paymentCommand.Parameters.AddWithValue("@PatientId", patientId);
+            var tempPayments = new List<PaymentViewModel>();
+            using var paymentReader = paymentCommand.ExecuteReader();
+            while (paymentReader.Read())
+            {
+                tempPayments.Add(new PaymentViewModel
+                    {
+                        PaymentId = paymentReader.GetInt32("id"),
+                        PatientId = paymentReader.GetInt32("patient_id"),
+                        PatientName = patientName,
+                        VisitType = paymentReader.GetString("visit_type"),
+                        CreatedDate = paymentReader.GetDateTime("created_date")
+                    });
+            }
+            paymentReader.Close();
+
+			@* Find the items *@
+            foreach (var payment in tempPayments)
+            {
+                string itemsQuery = @"
+                    SELECT type, description, quantity, amount
+                    FROM PaymentItems
+                    WHERE payment_id = @PaymentId";
+                using var itemsCommand = new MySqlCommand(itemsQuery, connection);
+                itemsCommand.Parameters.AddWithValue("@PaymentId", payment.PaymentId);
+                var items = new List<string>();
+                decimal totalAmount = 0;
+                using var itemsReader = itemsCommand.ExecuteReader();
+                while (itemsReader.Read())
+                {
+                    var type = itemsReader.GetString("type");
+                    var description = itemsReader.GetString("description");
+                    var quantity = itemsReader.GetInt32("quantity");
+                    var amount = itemsReader.GetDecimal("amount");
+                    items.Add($"{type}: {description}, Qty: {quantity}, ${amount:F2}");
+                    totalAmount += quantity * amount;
+                }
+                itemsReader.Close();
+                payment.Prescription = items.Any() ? string.Join("\n", items) : null;
+                payment.TotalAmount = totalAmount;
+                Payments.Add(payment);
+            }
+
+            if (!Payments.Any())
+            {
+                ErrorMessage = "No unpaid payments found for this patient.";
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to load payment data: {ex.Message}";
+            Payments.Clear();
+        }
+    }
+
+	// After cashier receives the payment, update the payment status to 'Paid'
+    private void HandleCheckout(int paymentId)
+    {
+        try
+        {
+            using var connection = DatabaseConnection.GetConnection();
+            connection.Open();
+
+            string updateQuery = @"
+                UPDATE Payments
+                SET status = 'Paid', payment_completion_date = @CompletionDate
+                WHERE id = @PaymentId AND status = 'Unpaid'";
+            using var command = new MySqlCommand(updateQuery, connection);
+            command.Parameters.AddWithValue("@PaymentId", paymentId);
+            command.Parameters.AddWithValue("@CompletionDate", DateTime.Now); 
+            int rowsAffected = command.ExecuteNonQuery();
+
+            if (rowsAffected > 0)
+            {
+                Payments.RemoveAll(p => p.PaymentId == paymentId);
+                if (!Payments.Any())
+                {
+                    ErrorMessage = "Payment successfully checked out.";
+                    IsSuccessMessage = true;
+                    PatientId = null;
+                }
+            }
+            else
+            {
+                ErrorMessage = "Failed to check out payment. It may have already been paid.";
+                IsSuccessMessage = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to check out payment: {ex.Message}";
+            IsSuccessMessage = false;
+        }
+    }
+
+    private class PaymentViewModel
+    {
+        public int PaymentId { get; set; }
+        public int PatientId { get; set; }
+        public string PatientName { get; set; }
+        public string VisitType { get; set; }
+        public DateTime CreatedDate { get; set; }
+        public decimal TotalAmount { get; set; }
+        public string Prescription { get; set; }
+    }
+}

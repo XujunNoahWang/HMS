@@ -1,0 +1,194 @@
+﻿@page "/doctor/schedule/new-appointment"
+@inherits AppointmentBase
+@using HMS.Models
+@using MySqlConnector
+
+<PageTitle>Add New Appointment</PageTitle>
+
+<div class="container">
+    <h3>Add New Appointment</h3>
+
+    @if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="alert alert-danger">@ErrorMessage</div>
+    }
+
+    <div class="row mb-3">
+        <div class="col-auto">
+            <div class="form-group">
+                <label for="patientId">Patient ID</label>
+                <input id="patientId" type="text" class="form-control no-spinner" @bind="PatientId" maxlength="9"
+                       style="width: 15ch;"
+                       onkeypress="return (event.charCode !=8 && event.charCode ==0 || (event.charCode >= 48 && event.charCode <= 57))" />
+            </div>
+        </div>
+    </div>
+
+    <!-- Can't not book today's appointment' -->
+    <div class="row mb-3">
+        <div class="col-auto">
+            <div class="form-group">
+                <label for="appointmentDate">Appointment Date</label>
+                <input id="appointmentDate" type="date" class="form-control"
+                min="@DateTime.Today.AddDays(1).ToString("yyyy-MM-dd")" 
+                       @bind-value="AppointmentDate"
+                       @bind-value:event="oninput"
+                       @onchange="OnDateChanged"
+                       style="width: 15ch;" />
+            </div>
+        </div>
+        <div class="col-auto">
+            <div class="form-group">
+                <label for="appointmentTime">Appointment Time</label>
+                <select id="appointmentTime" class="form-control" @bind="AppointmentTime" @onclick="UpdateTimeSlotsOnClick" style="width: 15ch;">
+                    <option value="">--Select Time--</option>
+                    @foreach (var time in TimeSlots)
+                    {
+                        <option value="@time">@time</option>
+                    }
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-auto">
+            <button class="btn btn-primary" @onclick="HandleBook">Book</button>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-secondary" @onclick="HandleCancel">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<style>
+    .no-spinner::-webkit-inner-spin-button,
+    .no-spinner::-webkit-outer-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+
+    .no-spinner[type=number] {
+        -moz-appearance: textfield;
+    }
+</style>
+
+@code {
+    private string PatientId { get; set; }
+    private int DoctorId => UserStateService.GetCurrentUser()?.Id ?? 0;
+    private DateTime LastUpdatedDate { get; set; }
+
+    protected override Role ExpectedRole => Role.Doctor;
+
+    protected override string SuccessNavigationUrl => "/doctor/schedule";
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        LastUpdatedDate = AppointmentDate;
+		UpdateTimeSlots(DoctorId); // Initial load, the doctor himself's schedule
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        base.OnAfterRender(firstRender);
+    }
+
+    private void OnDateChanged()
+    {
+        // Reset AppointmentTime when date changes
+        if (AppointmentDate != LastUpdatedDate)
+        {
+            AppointmentTime = ""; // Reset to --Select Time--
+            LastUpdatedDate = AppointmentDate;
+            UpdateTimeSlots(DoctorId);
+        }
+    }
+
+    private void UpdateTimeSlotsOnClick()
+    {
+        // Update time slots when the dropdown is clicked
+        UpdateTimeSlots(DoctorId);
+    }
+
+    protected override void UpdateTimeSlots(int doctorId)
+    {
+        base.UpdateTimeSlots(doctorId);
+    }
+
+    private async Task HandleBook()
+    {
+        ErrorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(PatientId) || !int.TryParse(PatientId, out int patientId) || PatientId.Length != 9)
+        {
+            ErrorMessage = "Please enter a valid 9-digit numeric Patient ID.";
+            return;
+        }
+
+        bool patientExists = false;
+        try
+        {
+            using var connection = DatabaseConnection.GetConnection();
+            await connection.OpenAsync();
+
+            string query = @"
+                SELECT COUNT(*)
+                FROM Users u
+                JOIN Patients p ON u.id = p.user_id
+                WHERE u.id = @PatientId AND u.role = 'Patient' AND u.status = 'Active'";
+            using var command = new MySqlCommand(query, connection);
+            command.Parameters.AddWithValue("@PatientId", patientId);
+            long count = (long)await command.ExecuteScalarAsync();
+            patientExists = count > 0;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to validate patient: {ex.Message}";
+            return;
+        }
+
+        if (!patientExists)
+        {
+            ErrorMessage = "Patient not found.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(AppointmentTime))
+        {
+            ErrorMessage = "Please select a valid appointment time.";
+            StateHasChanged(); // Ensure UI updates
+            return;
+        }
+
+        if (!TimeSpan.TryParse(AppointmentTime, out var timeSpan))
+        {
+            ErrorMessage = "Invalid appointment time format.";
+            StateHasChanged();
+            return;
+        }
+
+        DateTime appointmentDateTime = AppointmentDate.Date.Add(timeSpan);
+        if (appointmentDateTime <= DateTime.Today)
+        {
+            ErrorMessage = "Appointment time must be in the future.";
+            StateHasChanged();
+            return;
+        }
+
+        var currentUser = UserStateService.GetCurrentUser();
+        if (currentUser == null)
+        {
+            ErrorMessage = "Doctor not logged in.";
+            StateHasChanged();
+            return;
+        }
+
+        await BookAppointmentAsync(patientId, currentUser.Id, appointmentDateTime);
+    }
+
+    private void HandleCancel()
+    {
+        Navigation.NavigateTo("/doctor/schedule");
+    }
+}

@@ -1,0 +1,43 @@
+﻿@page "/"
+@using HMS.Models
+
+@* This is the page for role selection *@
+<PageTitle>Account Selection</PageTitle> 
+
+<div class="container">
+    <div class="row">
+        <div class="col-auto me-2">
+            <button class="btn btn-primary" @onclick="() => NavigateToLogin(Role.Doctor)" style="width: 15ch;">Doctor</button>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-primary" @onclick="() => NavigateToLogin(Role.Nurse)" style="width: 15ch;">Nurse</button>
+        </div>
+    </div>
+    <div class="row mt-3">
+        <div class="col-auto me-2">
+            <button class="btn btn-primary" @onclick="() => NavigateToLogin(Role.Cashier)" style="width: 15ch;">Cashier</button>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-primary" @onclick="() => NavigateToLogin(Role.Admin)" style="width: 15ch;">Admin</button>
+        </div>
+    </div>
+    <div class="row mt-3">
+        <div class="col-auto me-2">
+            <button class="btn btn-primary" @onclick="() => NavigateToLogin(Role.Patient)" style="width: 15ch;">Patient</button>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-secondary" disabled style="width: 15ch;">coming soon...</button>
+        </div>
+    </div>
+</div>
+
+@code {
+	// Get the service from Blazor's dependency injection for user navigation
+    [Inject]
+    private NavigationManager Navigation { get; set; }
+
+    private void NavigateToLogin(Role role)
+    {
+        Navigation.NavigateTo($"/login/{role}");
+    }
+}

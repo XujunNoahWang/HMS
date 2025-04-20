@@ -1,0 +1,311 @@
+﻿@page "/patient/add-appointment"
+@inherits AppointmentBase
+@using HMS.Models
+@using MySqlConnector
+
+<PageTitle>Add New Appointment</PageTitle>
+
+<div class="container">
+    <h3>Add New Appointment</h3>
+
+    @if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="alert alert-danger">@ErrorMessage</div>
+    }
+    <!--Patients can make appointments with different doctors-->
+    <div class="row mb-3">
+        <div class="col-auto">
+            <div class="form-group">
+                <label for="department">Select Department</label>
+                <select id="department" class="form-control" @bind="SelectedDepartment" @bind:after="LoadDoctors" style="width: 20ch;">
+                    <option value="">-- Select Department --</option>
+                    @foreach (var dept in Departments)
+                    {
+                        <option value="@dept">@dept</option>
+                    }
+                </select>
+            </div>
+        </div>
+    </div>
+
+    @if (Doctors.Any())
+    {
+        <table class="table table-bordered fixed-table">
+            <thead>
+                <tr>
+                    <th>Doctor Name</th>
+                    <th>Specialty</th>
+                    <th>Level</th>
+                    <th>Years of Service</th>
+                    <th>Date</th>
+                    <th>Time</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var doctor in Doctors)
+                {
+                    <tr>
+                        <td>@doctor.DoctorName</td>
+                        <td>@doctor.Specialty</td>
+                        <td>@doctor.Level</td>
+                        <td>@doctor.YearsOfService</td>
+                        <td>
+                            <input type="date" class="form-control"
+                                   min="@(DateTime.Today.AddDays(1).ToString("yyyy-MM-dd"))"
+                                   @bind="@doctor.SelectedDate"
+                                   @bind:after="@(() => UpdateTimeSlotsForDoctor(doctor))"
+                                   style="width: 100%;" />
+                        </td>
+                        <td>
+                            <select class="form-control" @bind="@doctor.SelectedTime" @onclick="@(() => UpdateTimeSlotsForDoctor(doctor))" style="width: 100%;">
+                                <option value="">--Select Time--</option>
+                                @foreach (var time in doctor.AvailableTimeSlots)
+                                {
+                                    <option value="@time">@time</option>
+                                }
+                            </select>
+                        </td>
+                        <td>
+                            <button class="btn btn-primary btn-sm" @onclick="() => HandleBook(doctor)">Book</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+<style>
+    .fixed-table {
+        table-layout: fixed;
+        width: 100%;
+    }
+
+        .fixed-table th,
+        .fixed-table td {
+            overflow-wrap: break-word;
+            word-break: break-word;
+            padding: 8px;
+            font-size: 1rem;
+        }
+
+            .fixed-table th:nth-child(1),
+            .fixed-table td:nth-child(1) {
+                width: 20%;
+            }
+
+            .fixed-table th:nth-child(2),
+            .fixed-table td:nth-child(2) {
+                width: 15%;
+            }
+
+            .fixed-table th:nth-child(3),
+            .fixed-table td:nth-child(3) {
+                width: 10%;
+            }
+
+            .fixed-table th:nth-child(4),
+            .fixed-table td:nth-child(4) {
+                width: 15%;
+            }
+
+            .fixed-table th:nth-child(5),
+            .fixed-table td:nth-child(5) {
+                width: 15%;
+            }
+
+            .fixed-table th:nth-child(6),
+            .fixed-table td:nth-child(6) {
+                width: 15%;
+            }
+
+            .fixed-table th:nth-child(7),
+            .fixed-table td:nth-child(7) {
+                width: 10%;
+            }
+
+        .fixed-table th {
+            text-align: center;
+        }
+
+        .fixed-table td {
+            text-align: left;
+        }
+</style>
+
+@code {
+	// A temporary class to hold doctor information
+    private class DoctorViewModel
+    {
+        public int DoctorId { get; set; }
+        public string DoctorName { get; set; }
+        public string Specialty { get; set; }
+        public string Level { get; set; }
+        public DateTime HireDate { get; set; }
+        public int YearsOfService { get; set; }
+        public DateTime SelectedDate { get; set; }
+        public string SelectedTime { get; set; }
+        public List<string> AvailableTimeSlots { get; set; } = new List<string>();
+    }
+
+    private List<string> Departments { get; set; } = new List<string>();
+    private string SelectedDepartment { get; set; }
+    private List<DoctorViewModel> Doctors { get; set; } = new List<DoctorViewModel>();
+    private Dictionary<int, DateTime> DoctorPreviousDates { get; set; } = new Dictionary<int, DateTime>();
+
+    protected override Role ExpectedRole => Role.Patient;
+
+    protected override string SuccessNavigationUrl => "/patient/appointments";
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        LoadDepartments();
+    }
+
+	// Firstly, load the departments from the database
+    private void LoadDepartments()
+    {
+        try
+        {
+            using var connection = DatabaseConnection.GetConnection();
+            connection.Open();
+
+            string query = "SELECT name FROM Departments WHERE closure_date IS NULL";
+            using var command = new MySqlCommand(query, connection);
+            using var reader = command.ExecuteReader();
+            Departments.Clear();
+            while (reader.Read())
+            {
+                Departments.Add(reader.GetString("name"));
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to load departments: {ex.Message}";
+        }
+    }
+
+	// Secondly, load the doctors based on the selected department
+    private void LoadDoctors()
+    {
+        try
+        {
+            using var connection = DatabaseConnection.GetConnection();
+            connection.Open();
+
+            string query = @"
+                SELECT u.id, u.first_name, u.last_name, dr.specialty, dr.level, dr.hire_date
+                FROM Users u
+                JOIN Doctors dr ON u.id = dr.user_id
+                WHERE dr.specialty = @Specialty AND dr.termination_date IS NULL";
+            using var command = new MySqlCommand(query, connection);
+            command.Parameters.AddWithValue("@Specialty", SelectedDepartment);
+            using var reader = command.ExecuteReader();
+            Doctors.Clear();
+            DoctorPreviousDates.Clear();
+            while (reader.Read())
+            {
+                var hireDate = reader.GetDateTime("hire_date");
+                var yearsOfService = DateTime.Today.Year - hireDate.Year;
+                var doctor = new DoctorViewModel
+                    {
+                        DoctorId = reader.GetInt32("id"),
+                        DoctorName = $"{reader.GetString("first_name")} {reader.GetString("last_name")}",
+                        Specialty = reader.GetString("specialty"),
+                        Level = reader.GetString("level"),
+                        HireDate = hireDate,
+                        YearsOfService = yearsOfService,
+                        SelectedDate = DateTime.Today.AddDays(1),
+                        SelectedTime = "" // Default to --Select Time--
+                    };
+                Doctors.Add(doctor);
+                DoctorPreviousDates[doctor.DoctorId] = doctor.SelectedDate;
+            }
+
+            foreach (var doctor in Doctors)
+            {
+                UpdateTimeSlotsForDoctor(doctor);
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to load doctors: {ex.Message}";
+        }
+    }
+
+	// Thirdly, update the time slots for the selected doctor
+    private void UpdateTimeSlotsForDoctor(DoctorViewModel doctor)
+    {
+        // Check if date has changed
+        bool dateChanged = !DoctorPreviousDates.ContainsKey(doctor.DoctorId) || doctor.SelectedDate != DoctorPreviousDates[doctor.DoctorId];
+
+        AppointmentDate = doctor.SelectedDate;
+        AppointmentTime = doctor.SelectedTime;
+        UpdateTimeSlots(doctor.DoctorId);
+        doctor.AvailableTimeSlots.Clear();
+        doctor.AvailableTimeSlots.AddRange(TimeSlots);
+
+        if (doctor.AvailableTimeSlots.Any())
+        {
+            if (dateChanged && string.IsNullOrEmpty(doctor.SelectedTime))
+            {
+                doctor.SelectedTime = ""; // Keep as --Select Time--
+            }
+            else if (!doctor.AvailableTimeSlots.Contains(doctor.SelectedTime))
+            {
+                doctor.SelectedTime = ""; // Reset to --Select Time-- if previously selected time is not available
+            }
+        }
+        else
+        {
+            doctor.SelectedTime = "";
+            ErrorMessage = $"No available time slots for Dr. {doctor.DoctorName} on the selected date.";
+        }
+
+        // Update previous date for this doctor
+        DoctorPreviousDates[doctor.DoctorId] = doctor.SelectedDate;
+    }
+
+    private async void HandleBook(DoctorViewModel doctor)
+    {
+        ErrorMessage = null;
+
+        if (doctor.SelectedDate == default(DateTime))
+        {
+            ErrorMessage = "Please select a valid date.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(doctor.SelectedTime))
+        {
+            ErrorMessage = "Please select a valid time.";
+            return;
+        }
+
+        if (!TimeSpan.TryParse(doctor.SelectedTime, out var timeSpan))
+        {
+            ErrorMessage = "Invalid time format.";
+            return;
+        }
+
+        DateTime appointmentDateTime = doctor.SelectedDate.Date.Add(timeSpan);
+        if (appointmentDateTime <= DateTime.Now)
+        {
+            ErrorMessage = "Appointment time must be in the future.";
+            return;
+        }
+
+        var currentUser = UserStateService.GetCurrentUser();
+        if (currentUser == null)
+        {
+            ErrorMessage = "Patient not logged in.";
+            return;
+        }
+
+        await BookAppointmentAsync(currentUser.Id, doctor.DoctorId, appointmentDateTime);
+    }
+
+    
+}

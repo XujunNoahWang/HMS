@@ -1,0 +1,251 @@
+﻿@page "/admin/edit-department"
+@inherits EditEntityBase
+@using HMS.Models
+@using MySqlConnector
+
+<PageTitle>Edit Department</PageTitle>
+
+<div class="container">
+    <h3>Edit Department</h3>
+
+    @if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="alert @(IsSuccessMessage ? "alert-success" : "alert-danger")">@ErrorMessage</div>
+    }
+
+    <div class="row mb-3">
+        <div class="col-auto">
+            <div class="form-group">
+                <label for="department">Select Department</label>
+                <select id="department" class="form-control" @bind="SelectedDepartmentId" @bind:after="LoadDepartmentDetails" style="width: 20ch;">
+                    <option value="0">-- Select Department --</option>
+                    @foreach (var dept in Departments)
+                    {
+                        <option value="@dept.Id">@dept.Name</option>
+                    }
+                </select>
+            </div>
+        </div>
+    </div>
+
+    @if (SelectedDepartmentId != 0)
+    {
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label for="newName">New Department Name</label>
+                    <input id="newName" type="text" class="form-control" @bind="NewDepartmentName" maxlength="50" style="width: 100%; font-size: 1rem;" />
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label for="newDescription">New Department Description (Optional)</label>
+                    <textarea id="newDescription" class="form-control" @bind="NewDescription" rows="3" style="width: 100%; font-size: 1rem;"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-auto">
+                <button class="btn btn-primary" @onclick="HandleUpdate">Update</button>
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-secondary" @onclick="HandleCancel">Cancel</button>
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-danger" @onclick="HandleShutDown">Shut Down</button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+
+	// A temporary class to represent a department
+    private class Department
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+    }
+    
+    private List<Department> Departments { get; set; } = new List<Department>();
+    private int SelectedDepartmentId { get; set; }
+    private string NewDepartmentName { get; set; }
+    private string NewDescription { get; set; }
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        LoadDepartments();
+    }
+
+	// Load existing departments from the database
+    private void LoadDepartments()
+    {
+        try
+        {
+            using var connection = DatabaseConnection.GetConnection();
+            connection.Open();
+
+            string query = "SELECT id, name FROM Departments WHERE closure_date IS NULL";
+            using var command = new MySqlCommand(query, connection);
+            using var reader = command.ExecuteReader();
+            Departments.Clear();
+            while (reader.Read())
+            {
+                Departments.Add(new Department
+                    {
+                        Id = reader.GetInt32("id"),
+                        Name = reader.GetString("name")
+                    });
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to load departments: {ex.Message}";
+        }
+    }
+
+    private void LoadDepartmentDetails()
+    {
+        if (SelectedDepartmentId == 0)
+        {
+            NewDepartmentName = null;
+            NewDescription = null;
+            return;
+        }
+
+        try
+        {
+            using var connection = DatabaseConnection.GetConnection();
+            connection.Open();
+
+            string query = @"
+                SELECT name, description
+                FROM Departments
+                WHERE id = @DepartmentId";
+            using var command = new MySqlCommand(query, connection);
+            command.Parameters.AddWithValue("@DepartmentId", SelectedDepartmentId);
+            using var reader = command.ExecuteReader();
+            if (reader.Read())
+            {
+                NewDepartmentName = reader.GetString("name");
+                NewDescription = reader.IsDBNull(reader.GetOrdinal("description")) ? null : reader.GetString("description");
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to load department details: {ex.Message}";
+        }
+    }
+
+    private async Task HandleUpdate()
+    {
+        ErrorMessage = null;
+        IsSuccessMessage = false;
+
+        if (string.IsNullOrWhiteSpace(NewDepartmentName))
+        {
+            ErrorMessage = "Department Name is required.";
+            return;
+        }
+
+        try
+        {
+            using var connection = DatabaseConnection.GetConnection();
+            await connection.OpenAsync();
+
+            // Check if department name already exists
+            string checkQuery = @"
+                SELECT COUNT(*)
+                FROM Departments
+                WHERE name = @NewName AND closure_date IS NULL AND id != @DepartmentId";
+            using var checkCommand = new MySqlCommand(checkQuery, connection);
+            checkCommand.Parameters.AddWithValue("@NewName", NewDepartmentName);
+            checkCommand.Parameters.AddWithValue("@DepartmentId", SelectedDepartmentId);
+            long count = (long)await checkCommand.ExecuteScalarAsync();
+            if (count > 0)
+            {
+                ErrorMessage = "A department with this name already exists.";
+                return;
+            }
+
+            string query = @"
+                UPDATE Departments
+                SET name = @NewName, description = @NewDescription
+                WHERE id = @DepartmentId";
+            using var command = new MySqlCommand(query, connection);
+            command.Parameters.AddWithValue("@NewName", NewDepartmentName);
+            command.Parameters.AddWithValue("@NewDescription", string.IsNullOrWhiteSpace(NewDescription) ? (object)DBNull.Value : NewDescription);
+            command.Parameters.AddWithValue("@DepartmentId", SelectedDepartmentId);
+
+            int rowsAffected = await command.ExecuteNonQueryAsync();
+            if (rowsAffected > 0)
+            {
+                HandleCancel();
+                LoadDepartments();
+                ShowSuccessMessage("Department updated successfully.");
+            }
+            else
+            {
+                ErrorMessage = "Failed to update department.";
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to update department: {ex.Message}";
+        }
+    }
+
+    private async Task HandleShutDown()
+    {
+        bool confirm = await ConfirmAction("Are you sure you want to shut down this department?");
+        if (confirm)
+        {
+            try
+            {
+                using var connection = DatabaseConnection.GetConnection();
+                await connection.OpenAsync();
+
+                string query = @"
+                    UPDATE Departments
+                    SET closure_date = @ClosureDate
+                    WHERE id = @DepartmentId";
+                using var command = new MySqlCommand(query, connection);
+                command.Parameters.AddWithValue("@ClosureDate", DateTime.Today);
+                command.Parameters.AddWithValue("@DepartmentId", SelectedDepartmentId);
+
+                int rowsAffected = await command.ExecuteNonQueryAsync();
+                if (rowsAffected > 0)
+                {
+                    HandleCancel();
+                    LoadDepartments();
+                    ShowSuccessMessage("Department shut down successfully.");
+                }
+                else
+                {
+                    ErrorMessage = "Failed to shut down department.";
+                    IsSuccessMessage = false;
+                }
+            }
+            catch (Exception ex)
+            {
+                ErrorMessage = $"Failed to shut down department: {ex.Message}";
+                IsSuccessMessage = false;
+            }
+        }
+    }
+
+    protected override void HandleCancel()
+    {
+        SelectedDepartmentId = 0;
+        NewDepartmentName = null;
+        NewDescription = null;
+        base.HandleCancel();
+    }
+
+    
+}

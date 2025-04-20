@@ -1,0 +1,130 @@
+﻿@page "/login/{roleName}"
+@using HMS.Services
+@using HMS.Models
+@* Get methods from other pages by using inject*@
+@inject IAuthService AuthService
+@inject UserStateService UserStateService
+@inject NavigationManager Navigation
+
+<PageTitle>Login - @RoleName</PageTitle>
+
+<div class="container">
+    <h3>Login as @RoleName</h3>
+    <div>
+        <div class="form-group">
+            <label for="id">ID</label>
+            <input id="id" type="text" class="form-control no-spinner" @bind="loginModel.Id" style="width: 20ch;" />
+        </div>
+        <div class="form-group">
+            <label for="password">Password</label>
+            <input id="password" type="password" class="form-control" @bind="loginModel.Password" style="width: 20ch;" />
+        </div>
+        <button class="btn btn-primary mt-3" @onclick="HandleLogin" style="width: 20ch;">Login</button>
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger mt-3">@errorMessage</div>
+        }
+    </div>
+</div>
+
+<style>
+    .no-spinner::-webkit-inner-spin-button,
+    .no-spinner::-webkit-outer-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+
+    .no-spinner[type=number] {
+        -moz-appearance: textfield;
+    }
+</style>
+
+@code {
+    [Parameter]
+    public string RoleName { get; set; }
+
+    private Role RoleEnum
+    {
+        get
+        {
+            if (Enum.TryParse<Role>(RoleName, true, out var roleEnum))
+            {
+                return roleEnum;
+            }
+            throw new ArgumentException($"Invalid role: {RoleName}");
+        }
+    }
+
+	// A temporary class for logging in.
+    public class LoginModel
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+    }
+
+    private LoginModel loginModel = new();
+    private string errorMessage;
+
+    protected override void OnInitialized()
+    {
+		// I put the default values here for easier testing.
+        switch (RoleEnum)
+        {
+            case Role.Doctor:
+                loginModel.Id = "198906061";
+                loginModel.Password = "Password123";
+                break;
+            case Role.Nurse:
+                loginModel.Id = "198906077";
+                loginModel.Password = "Password123";
+                break;
+            case Role.Cashier:
+                loginModel.Id = "198906126";
+                loginModel.Password = "Password123";
+                break;
+            case Role.Admin:
+                loginModel.Id = "198906042";
+                loginModel.Password = "Password123";
+                break;
+            case Role.Patient:
+                loginModel.Id = "198906149";
+                loginModel.Password = "Password123";
+                break;
+        }
+    }
+
+    private void HandleLogin()
+    {
+        errorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(loginModel.Id))
+        {
+            errorMessage = "ID cannot be empty.";
+            return;
+        }
+
+        if (loginModel.Id.Length != 9 || !int.TryParse(loginModel.Id, out int parsedId))
+        {
+            errorMessage = "Please enter a valid 9-digit numeric ID.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(loginModel.Password))
+        {
+            errorMessage = "Password cannot be empty.";
+            return;
+        }
+
+        try
+        {
+            var user = AuthService.Authenticate(parsedId, loginModel.Password, RoleEnum);
+            UserStateService.SetCurrentUser(user);
+            Navigation.NavigateTo(user.GetDashboardRoute());
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+}
