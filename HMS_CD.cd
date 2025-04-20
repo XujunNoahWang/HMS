@@ -65,7 +65,7 @@
     </TypeIdentifier>
   </Class>
   <Class Name="HMS.Models.Prescription">
-    <Position X="18.75" Y="3" Width="1.5" />
+    <Position X="21.25" Y="6.25" Width="1.5" />
     <TypeIdentifier>
       <HashCode>AAACAAAAQQAAAAAAAAAAAAQAAAAAAAAAAQAAgAAAAAA=</HashCode>
       <FileName>Models\Prescription.cs</FileName>
@@ -74,29 +74,42 @@
   <Class Name="DashboardBase">
     <Position X="17" Y="0.5" Width="1.5" />
     <TypeIdentifier>
-      <HashCode>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</HashCode>
-      <FileName>Services\DashboardBase.cs</FileName>
+      <HashCode>AAAAEAAAACAQAAAgAAAAAAEAAAAAAAAACAAAAAAQQAA=</HashCode>
+      <FileName>Models\DashboardBase.cs</FileName>
     </TypeIdentifier>
+    <Lollipop Position="0.2" />
   </Class>
   <Class Name="PatientsBase">
-    <Position X="18.75" Y="0.5" Width="1.5" />
+    <Position X="19" Y="2.25" Width="1.5" />
     <TypeIdentifier>
-      <HashCode>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</HashCode>
-      <FileName>Services\PatientsBase.cs</FileName>
+      <HashCode>AAAAAIAAAQAEQAAAIAAAAAAAAAQAgCAACAAAAAAACAA=</HashCode>
+      <FileName>Models\PatientsBase.cs</FileName>
     </TypeIdentifier>
   </Class>
   <Class Name="ScheduleBase">
-    <Position X="18.75" Y="1.75" Width="1.5" />
+    <Position X="19.25" Y="6.25" Width="1.5" />
+    <NestedTypes>
+      <Class Name="ScheduleBase.AppointmentViewModel" Collapsed="true">
+        <TypeIdentifier>
+          <NewMemberFileName>Models\ScheduleBase.cs</NewMemberFileName>
+        </TypeIdentifier>
+      </Class>
+      <Enum Name="ScheduleBase.AppointmentStatus" Collapsed="true">
+        <TypeIdentifier>
+          <NewMemberFileName>Models\ScheduleBase.cs</NewMemberFileName>
+        </TypeIdentifier>
+      </Enum>
+    </NestedTypes>
     <TypeIdentifier>
-      <HashCode>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</HashCode>
-      <FileName>Services\ScheduleBase.cs</FileName>
+      <HashCode>EQAAAAAAARAIAAAgIAAAAAAEQAAAgCAACQAAACAQQAA=</HashCode>
+      <FileName>Models\ScheduleBase.cs</FileName>
     </TypeIdentifier>
   </Class>
   <Class Name="RecordsBase">
-    <Position X="17" Y="1.75" Width="1.5" />
+    <Position X="21.25" Y="2.25" Width="1.5" />
     <TypeIdentifier>
-      <HashCode>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</HashCode>
-      <FileName>Services\RecordsBase.cs</FileName>
+      <HashCode>EQAAAAAAAAAEQAAgAAAAAAABAAAAAQAACAAAAAAQQAA=</HashCode>
+      <FileName>Models\RecordsBase.cs</FileName>
     </TypeIdentifier>
   </Class>
   <Class Name="AppointmentBase">
@@ -129,7 +142,7 @@
     </TypeIdentifier>
   </Class>
   <Class Name="HMS.Services.AuthService">
-    <Position X="18.75" Y="6.75" Width="1.5" />
+    <Position X="17" Y="8" Width="1.5" />
     <TypeIdentifier>
       <HashCode>AAAAAAAAAAAAAAAAAAAAAAIAgAAAAAAAAAAAAAAAAAA=</HashCode>
       <FileName>Services\AuthService.cs</FileName>
@@ -137,7 +150,7 @@
     <Lollipop Position="0.2" />
   </Class>
   <Class Name="HMS.Services.UserStateService">
-    <Position X="17" Y="6.75" Width="1.5" />
+    <Position X="15.25" Y="8" Width="1.5" />
     <TypeIdentifier>
       <HashCode>AAAAAAAQAAAAACAAAEIAAAAAIAAAAAAAAAAAAAAAAAA=</HashCode>
       <FileName>Services\UserStateService.cs</FileName>
